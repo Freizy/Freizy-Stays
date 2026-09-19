@@ -1,0 +1,32 @@
+{
+  "name": "freizy-stays",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "npm@11.18.0",
+  "description": "Freizy Stays - Hostel Booking App MVP. Intelligence Finds You Home.",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "turbo run dev",
+    "dev:server": "turbo run dev --filter=@freizy-stays/server",
+    "dev:mobile": "turbo run start --filter=@freizy-stays/mobile",
+    "build": "turbo run build",
+    "lint": "turbo run lint",
+    "typecheck": "turbo run typecheck",
+    "db:generate": "turbo run db:generate --filter=@freizy-stays/server",
+    "db:migrate": "turbo run db:migrate --filter=@freizy-stays/server",
+    "db:push": "turbo run db:push --filter=@freizy-stays/server",
+    "db:studio": "turbo run db:studio --filter=@freizy-stays/server",
+    "db:seed": "npm run seed --workspace @freizy-stays/server"
+  },
+  "devDependencies": {
+    "turbo": "^2.5.4",
+    "typescript": "^5.6.3",
+    "prettier": "^3.3.3"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

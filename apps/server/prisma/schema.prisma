@@ -1,0 +1,176 @@
+// Freizy Stays — Prisma schema (Supabase Postgres)
+// Tables mirror the MVP brief collections: Users, Hostels, Bookings + Payments.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+enum Role {
+  STUDENT
+  OWNER
+  ADMIN
+}
+
+enum BookingStatus {
+  pending
+  paid
+  moved_in
+  cancelled
+}
+
+enum EscrowStatus {
+  held
+  released
+  refunded
+}
+
+enum PaymentType {
+  full
+  installment
+}
+
+enum PaymentProvider {
+  MTN_MOMO
+  VODAFONE_CASH
+  CARD
+}
+
+enum PaymentStatus {
+  initiated
+  pending
+  success
+  failed
+}
+
+model User {
+  id        String   @id @default(cuid())
+  // Supabase Auth user id (auth.users.id) — link, don't duplicate passwords
+  supabaseId String? @unique @map("supabase_id")
+  phone     String?  @unique
+  email     String?  @unique
+  role      Role     @default(STUDENT)
+  school    String?
+  budget    Int?
+  mustHaves String[] @default([]) @map("must_haves")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  hostels  Hostel[]  @relation("OwnerHostels")
+  bookings Booking[] @relation("StudentBookings")
+  issues   Issue[]   @relation("StudentIssues")
+  pushToken String?  @map("push_token")
+
+  @@map("users")
+}
+
+model Hostel {
+  id                String   @id @default(cuid())
+  ownerId           String   @map("owner_id")
+  owner             User     @relation("OwnerHostels", fields: [ownerId], references: [id], onDelete: Cascade)
+  name              String
+  location          String
+  latitude          Float?
+  longitude         Float?
+  distanceToCampusKm Float?  @map("distance_to_campus_km")
+  pricePerSemester  Int      @map("price_per_semester")
+  images            String[] @default([])
+  videoUrl          String?  @map("video_url")
+  amenities         String[] @default([])
+  isVerified        Boolean  @default(false) @map("is_verified")
+  lightScore        Float?   @map("light_score")
+  waterScore        Float?   @map("water_score")
+  agentFee          Boolean  @default(false) @map("agent_fee")
+  momoAllowed       Boolean  @default(true) @map("momo_allowed")
+  school            String?
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  bookings Booking[]
+  ratings  Rating[]
+  issues   Issue[]
+
+  @@index([school])
+  @@index([isVerified])
+  @@index([pricePerSemester])
+  @@map("hostels")
+}
+
+model Booking {
+  id           String        @id @default(cuid())
+  studentId    String        @map("student_id")
+  student      User          @relation("StudentBookings", fields: [studentId], references: [id], onDelete: Cascade)
+  hostelId     String        @map("hostel_id")
+  hostel       Hostel        @relation(fields: [hostelId], references: [id], onDelete: Cascade)
+  total        Int
+  paidAmount   Int           @default(0) @map("paid_amount")
+  paymentType  PaymentType   @map("payment_type")
+  status       BookingStatus @default(pending)
+  escrowStatus EscrowStatus  @default(held) @map("escrow_status")
+  ownerApproved Boolean      @default(false) @map("owner_approved")
+  createdAt    DateTime      @default(now()) @map("created_at")
+  updatedAt    DateTime      @updatedAt @map("updated_at")
+
+  payments Payment[]
+
+  rating Rating?
+
+  @@index([studentId])
+  @@index([hostelId])
+  @@map("bookings")
+}
+
+model Payment {
+  id        String          @id @default(cuid())
+  bookingId String          @map("booking_id")
+  booking   Booking         @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  provider  PaymentProvider
+  amount    Int
+  status    PaymentStatus   @default(initiated)
+  reference String          @unique
+  raw       Json?
+  createdAt DateTime        @default(now()) @map("created_at")
+  updatedAt DateTime        @updatedAt @map("updated_at")
+
+  @@index([bookingId])
+  @@map("payments")
+}
+
+model Rating {
+  id        String   @id @default(cuid())
+  bookingId String   @unique @map("booking_id")
+  booking   Booking  @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  hostelId  String   @map("hostel_id")
+  hostel    Hostel   @relation(fields: [hostelId], references: [id], onDelete: Cascade)
+  studentId String   @map("student_id")
+  waterScore Int     @map("water_score")
+  lightScore Int     @map("light_score")
+  comment   String?
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([hostelId])
+  @@map("ratings")
+}
+
+model Issue {
+  id        String   @id @default(cuid())
+  studentId String   @map("student_id")
+  student   User     @relation("StudentIssues", fields: [studentId], references: [id], onDelete: Cascade)
+  hostelId  String?  @map("hostel_id")
+  hostel    Hostel?  @relation(fields: [hostelId], references: [id], onDelete: SetNull)
+  bookingId String?  @map("booking_id")
+  kind      String   @default("REPORT") // SOS | REPORT
+  message   String
+  status    String   @default("open") // open | resolved
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([hostelId])
+  @@map("issues")
+}

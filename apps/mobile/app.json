@@ -1,0 +1,28 @@
+{
+  "expo": {
+    "name": "Freizy Stays",
+    "slug": "freizy-stays",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "scheme": "freizystays",
+    "primaryColor": "#E30613",
+    "icon": "./assets/logo.png",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "tech.freizy.stays"
+    },
+    "android": {
+      "package": "tech.freizy.stays",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/logo.png",
+        "backgroundColor": "#FFFFFF"
+      }
+    },
+    "plugins": [
+      "expo-status-bar",
+      "expo-sharing",
+      "expo-font",
+      "expo-web-browser"
+    ]
+  }
+}

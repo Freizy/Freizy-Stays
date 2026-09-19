@@ -1,0 +1,34 @@
+# Freizy Stays monorepo
+node_modules/
+dist/
+build/
+.expo/
+.expo-shared/
+*.log
+.DS_Store
+
+# Expo / React Native
+apps/mobile/.expo/
+apps/mobile/dist/
+apps/mobile/web-build/
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+*.orig.*
+
+# Env
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# Prisma
+apps/server/prisma/migrations/migration_lock.toml
+
+# OS / editors
+Thumbs.db
+.vscode/*
+!.vscode/extensions.json
+.idea/

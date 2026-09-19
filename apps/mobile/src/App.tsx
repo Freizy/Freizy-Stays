@@ -1,0 +1,116 @@
+import React, { useEffect, useRef, useState } from "react";
+import { ActivityIndicator, Image, Text, View } from "react-native";
+import { NavigationContainer } from "@react-navigation/native";
+import { createNativeStackNavigator } from "@react-navigation/native-stack";
+import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
+import { Ionicons } from "@expo/vector-icons";
+import { Orbitron_800ExtraBold, useFonts } from "@expo-google-fonts/orbitron";
+import { LoginScreen } from "./screens/LoginScreen";
+import { OnboardingScreen } from "./screens/OnboardingScreen";
+import { ProfileScreen } from "./screens/ProfileScreen";
+import { DashboardScreen } from "./screens/MoreScreens";
+import { AdminScreen } from "./screens/AdminScreen";
+import { MapScreen } from "./screens/MapScreen";
+import { HomeStack } from "./navigation/HomeStack";
+import { OwnerStack } from "./navigation/OwnerStack";
+import { useSession } from "./store/session";
+import { loadProfile, restoreToken, signOut } from "./services/auth";
+import { theme } from "./theme";
+import { registerPushToken, setupPushListeners } from "./services/push";
+
+const Stack = createNativeStackNavigator();
+const Tabs = createBottomTabNavigator();
+
+function tabIcon(active: string, inactive: string) {
+  return ({ color, size, focused }: { color: string; size: number; focused: boolean }) => (
+    <Ionicons name={(focused ? active : inactive) as keyof typeof Ionicons.glyphMap} size={size} color={color} />
+  );
+}
+
+function MainTabs() {
+  const profile = useSession((s) => s.profile);
+  return (
+    <Tabs.Navigator screenOptions={{ tabBarActiveTintColor: theme.colors.primary, tabBarInactiveTintColor: "#8E8E93" }}>
+      <Tabs.Screen name="Home" component={HomeStack} options={{ headerShown: false, tabBarIcon: tabIcon("home", "home-outline") }} />
+      <Tabs.Screen name="Explore" component={MapScreen} options={{ headerShown: false, tabBarIcon: tabIcon("compass", "compass-outline") }} />
+      <Tabs.Screen name="Bookings" component={DashboardScreen} options={{ tabBarIcon: tabIcon("calendar", "calendar-outline") }} />
+      <Tabs.Screen name="Profile" component={ProfileScreen} options={{ tabBarIcon: tabIcon("person", "person-outline") }} />
+      {(profile?.role === "OWNER" || profile?.role === "ADMIN") && (
+        <Tabs.Screen name="Owner" component={OwnerStack} options={{ headerShown: false, tabBarIcon: tabIcon("business", "business-outline") }} />
+      )}
+      {profile?.role === "ADMIN" && (
+        <Tabs.Screen name="Admin" component={AdminScreen} options={{ tabBarIcon: tabIcon("shield-checkmark", "shield-checkmark-outline") }} />
+      )}
+    </Tabs.Navigator>
+  );
+}
+
+export default function App() {
+  const [fontsLoaded] = useFonts({ Orbitron_800ExtraBold });
+  const [devIn, setDevIn] = useState(false);
+  const [booting, setBooting] = useState(true);
+  const token = useSession((s) => s.token);
+  const profile = useSession((s) => s.profile);
+  const setSession = useSession((s) => s.setSession);
+  const navRef = useRef<any>(null);
+
+  useEffect(() => {
+    const sub = setupPushListeners((tab: string) => {
+      if (tab === "Bookings" || tab === "Owner" || tab === "Home") navRef.current?.navigate(tab);
+    });
+    return () => sub.remove();
+  }, []);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const t = await restoreToken();
+        if (t) {
+          setSession(t, await loadProfile(t));
+          registerPushToken(t);
+        }
+      } finally {
+        setBooting(false);
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const handleAuthed = async (t: string) => {
+    setSession(t, await loadProfile(t));
+    registerPushToken(t);
+  };
+
+  if (booting || !fontsLoaded) {
+    return (
+      <View style={{ flex: 1, backgroundColor: theme.colors.black, alignItems: "center", justifyContent: "center" }}>
+        <Image source={require("../assets/logo3.png")} style={{ width: 120, height: 120 }} resizeMode="contain" />
+        <Text style={{ color: "#fff", fontSize: 24, fontWeight: "800", letterSpacing: 2, marginTop: 12 }}>FREIZY STAYS</Text>
+        <ActivityIndicator color={theme.colors.primary} style={{ marginTop: 16 }} />
+      </View>
+    );
+  }
+
+  const authed = devIn || !!token;
+  const needsOnboarding = !!token && !devIn && !!profile && profile.role === "STUDENT" && !profile.school;
+
+  return (
+    <NavigationContainer ref={navRef}>
+      <Stack.Navigator screenOptions={{ headerShown: false }}>
+        {!authed ? (
+          <Stack.Screen name="Login">
+            {() => <LoginScreen onAuthed={handleAuthed} onDevBypass={() => setDevIn(true)} />}
+          </Stack.Screen>
+        ) : needsOnboarding && token ? (
+          <Stack.Screen name="Onboarding">
+            {() => <OnboardingScreen token={token} onDone={(p) => setSession(token, p)} />}
+          </Stack.Screen>
+        ) : (
+          <Stack.Screen name="Main" component={MainTabs} />
+        )}
+      </Stack.Navigator>
+    </NavigationContainer>
+  );
+}
+
+export { signOut };
