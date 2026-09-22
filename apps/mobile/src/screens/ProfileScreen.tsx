@@ -118,8 +118,7 @@ export function ProfileScreen() {
         <Row label="Role" value={profile.role} />
       </Card>
 
-      {(profile.role === "ADMIN" || profile.role === "OWNER") && (
-        <View style={{ marginBottom: 24 }}>
+      <View style={{ marginBottom: 24 }}>
           <Text style={{ fontWeight: "800", fontSize: 16 }}>School focus</Text>
           <Text style={{ color: "#666", fontSize: 12, marginTop: 2 }}>Drives your Home feed + map focus.</Text>
           <View style={{ marginTop: 8 }}>
@@ -131,7 +130,6 @@ export function ProfileScreen() {
             <PrimaryButton title="Save school" onPress={saveSchool} loading={busy} />
           </View>
         </View>
-      )}
       <View style={{ marginTop: 16, marginBottom: 24 }}>
         <PrimaryButton title="Log out" tone="dark" onPress={logout} />
       </View>

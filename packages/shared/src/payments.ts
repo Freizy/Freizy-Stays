@@ -12,3 +12,11 @@ export interface Payment {
 
 export const ESCROW_COPY =
   "Your money is safe with Freizy. Owner gets paid only after you move in and confirm.";
+
+/** One-time onboarding fee per role (GHS). Required before first booking (student) / listing (owner). */
+export const ACCESS_FEE_GHS = {
+  STUDENT: 50,
+  OWNER: 100,
+} as const;
+
+export type AccessFeeStatus = "initiated" | "pending" | "success" | "failed";

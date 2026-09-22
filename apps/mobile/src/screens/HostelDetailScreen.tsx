@@ -2,8 +2,8 @@ import React, { useEffect, useState } from "react";
 import { ActivityIndicator, Alert, Image, Linking, ScrollView, Share, Text, TouchableOpacity, View } from "react-native";
 import { useNavigation, useRoute } from "@react-navigation/native";
 import { Ionicons } from "@expo/vector-icons";
-import type { Hostel } from "@freizy-stays/shared";
-import { Card, Empty, PrimaryButton, Screen, distKm } from "../components/ui";
+import { roomLabel, type Hostel } from "@freizy-stays/shared";
+import { Badge, Card, Empty, PrimaryButton, Screen, distKm, ghs } from "../components/ui";
 import { theme } from "../theme";
 import { api } from "../services/api";
 import { useSession } from "../store/session";
@@ -271,6 +271,23 @@ export function HostelDetailScreen() {
           </View>
         ) : (
           <Text style={{ color: "#888", marginTop: 18 }}>Full payment only for this hostel.</Text>
+        )}
+
+        {!!hostel.roomTypes?.length && (
+          <>
+            <Text style={{ fontSize: 19, fontWeight: "800", marginTop: 18 }}>Rooms</Text>
+            {hostel.roomTypes.map((t) => {
+              const left = t.available ?? 1;
+              return (
+                <View key={t.id} style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginTop: 8 }}>
+                  <Text style={{ fontWeight: "700" }}>
+                    {roomLabel(t)} · {t.capacity} {t.capacity > 1 ? "people" : "person"} · {ghs(t.price ?? hostel.pricePerSemester)}
+                  </Text>
+                  <Badge tone={left > 0 ? "verified" : "muted"}>{left > 0 ? `${left} left` : "Full"}</Badge>
+                </View>
+              );
+            })}
+          </>
         )}
 
         {(profile == null || profile.role === "STUDENT") && (

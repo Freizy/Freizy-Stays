@@ -69,6 +69,7 @@ model User {
   suspended Boolean @default(false)
   announcements Announcement[] @relation("AdminAnnouncements")
   payouts Payout[] @relation("OwnerPayouts")
+  accessFee AccessFee?
 
   @@map("users")
 }
@@ -98,6 +99,7 @@ model Hostel {
   bookings Booking[]
   ratings  Rating[]
   issues   Issue[]
+  roomTypes RoomType[]
   verificationChecklist String[]  @default([]) @map("verification_checklist")
   verifiedAt            DateTime? @map("verified_at")
   verifiedBy            String?   @map("verified_by")
@@ -130,8 +132,12 @@ model Booking {
 
   rating Rating?
 
+  roomTypeId String?   @map("room_type_id")
+  roomType   RoomType? @relation(fields: [roomTypeId], references: [id], onDelete: SetNull)
+
   @@index([studentId])
   @@index([hostelId])
+  @@index([roomTypeId])
   @@map("bookings")
 }
 
@@ -225,6 +231,41 @@ model AuditLog {
 
   @@index([createdAt])
   @@map("audit_log")
+}
+
+model AccessFee {
+  id        String   @id @default(cuid())
+  userId    String   @unique @map("user_id")
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role      Role
+  amount    Int
+  provider  PaymentProvider?
+  phone     String?
+  status    PaymentStatus   @default(initiated)
+  reference String          @unique
+  raw       Json?
+  paidAt    DateTime? @map("paid_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+
+  @@map("access_fees")
+}
+
+model RoomType {
+  id        String   @id @default(cuid())
+  hostelId  String   @map("hostel_id")
+  hostel    Hostel   @relation(fields: [hostelId], references: [id], onDelete: Cascade)
+  kind      String // single | shared
+  capacity  Int // 1-4 occupants
+  total     Int // rooms of this type
+  price     Int? // per-semester override, else hostel price
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  bookings Booking[]
+
+  @@index([hostelId])
+  @@map("room_types")
 }
 
 model School {

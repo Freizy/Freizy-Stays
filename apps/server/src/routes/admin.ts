@@ -105,7 +105,7 @@ router.delete("/hostels/:id", async (req: AuthedRequest, res, next) => {
 router.get("/bookings", async (_req, res, next) => {
   try {
     const bookings = await prisma.booking.findMany({
-      include: { hostel: true, student: true, payments: true },
+      include: { hostel: true, student: true, roomType: true, payments: true },
       orderBy: { createdAt: "desc" },
       take: 100,
     });

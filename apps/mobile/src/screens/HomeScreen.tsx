@@ -6,6 +6,7 @@ import { Badge, Card, Chip, Empty, Input, Screen, distKm, ghs } from "../compone
 import { theme } from "../theme";
 import { api } from "../services/api";
 import { useSession } from "../store/session";
+import { useNavigation } from "@react-navigation/native";
 
 export const MOCK: Hostel[] = [
   {
@@ -53,6 +54,7 @@ function accentFor(h: Hostel): string | null {
 export function HomeScreen({ onSelect }: { onSelect?: (h: Hostel) => void }) {
   const token = useSession((s) => s.token);
   const profile = useSession((s) => s.profile);
+  const navigation = useNavigation<any>();
   const [active, setActive] = useState<string[]>(["Verified Only"]);
   const [q, setQ] = useState("");
   const [items, setItems] = useState<Hostel[]>(MOCK);
@@ -68,6 +70,8 @@ export function HomeScreen({ onSelect }: { onSelect?: (h: Hostel) => void }) {
   };
 
   const [notices, setNotices] = useState<any[]>([]);
+  const [feeUnpaid, setFeeUnpaid] = useState(false);
+  const [feeAmount, setFeeAmount] = useState(50);
   useEffect(() => {
     (async () => {
       try {
@@ -78,6 +82,22 @@ export function HomeScreen({ onSelect }: { onSelect?: (h: Hostel) => void }) {
       }
     })();
   }, [profile?.role]);
+
+  useEffect(() => {
+    if (!token) {
+      setFeeUnpaid(false);
+      return;
+    }
+    (async () => {
+      try {
+        const s = (await api.accessFeeMine(token)) as { paid: boolean; amount: number };
+        setFeeUnpaid(!s.paid);
+        setFeeAmount(s.amount ?? 50);
+      } catch {
+        /* offline */
+      }
+    })();
+  }, [token]);
 
   useEffect(() => {
     if (!token) {
@@ -198,6 +218,14 @@ export function HomeScreen({ onSelect }: { onSelect?: (h: Hostel) => void }) {
         </View>
       )}
 
+      {feeUnpaid && profile?.role === "STUDENT" && (
+        <TouchableOpacity
+          onPress={() => navigation.navigate("AccessFee", { requiredFor: "booking" })}
+          style={{ backgroundColor: "#FDECEC", borderRadius: 12, padding: 12, marginTop: 8, flexDirection: "row", alignItems: "center" }}
+        >
+          <Text style={{ flex: 1, fontWeight: "700" }}>🔒 Pay {ghs(feeAmount)} one-time fee to unlock booking →</Text>
+        </TouchableOpacity>
+      )}
       {loading && items.length === 0 ? (
         <ActivityIndicator style={{ marginTop: 32 }} />
       ) : (

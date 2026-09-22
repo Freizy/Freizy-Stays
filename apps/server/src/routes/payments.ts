@@ -7,6 +7,7 @@ import { normalizeGhanaMsisdn } from "../services/phone";
 import { notifyUser } from "../services/push";
 import { getTransactionStatus, isMomoConfigured, requestToPay } from "../services/momo";
 import { initializeTransaction, isPaystackConfigured, verifyTransaction } from "../services/paystack";
+import { applyFeeResult } from "../services/accessFee";
 
 const router = Router();
 const ESCROW_NOTICE = "Your money is safe with Freizy. Owner gets paid only after you move in and confirm.";
@@ -103,7 +104,9 @@ router.post("/webhook/:provider", async (req, res, next) => {
     if (!reference) return res.status(400).json({ message: "Missing reference" });
     const ok = status === "success" || status === "successful" || status === "SUCCESSFUL";
     const payment = await applyPaymentResult(reference, ok, req.body);
-    if (!payment) return res.status(404).json({ message: "Unknown reference" });
+    if (payment) return res.json({ ok: true });
+    const fee = await applyFeeResult(reference, ok, req.body);
+    if (!fee) return res.status(404).json({ message: "Unknown reference" });
     res.json({ ok: true });
   } catch (e) {
     next(e);

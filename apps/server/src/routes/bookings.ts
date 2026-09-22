@@ -2,6 +2,8 @@ import { Router } from "express";
 import { z } from "zod";
 import { prisma } from "../config/prisma";
 import { requireAuth, type AuthedRequest } from "../middlewares/requireAuth";
+import { ACTIVE_BOOKING } from "../services/availability";
+import { feeAmountFor, hasPaidAccessFee } from "../services/accessFee";
 import { notifyUser } from "../services/push";
 
 const router = Router();
@@ -10,6 +12,7 @@ const INSTALLMENTS = 4;
 const createSchema = z.object({
   hostelId: z.string(),
   paymentType: z.enum(["full", "installment"]),
+  roomTypeId: z.string(),
 });
 
 /** POST /api/bookings — student locks a room. 1st installment (25%) to lock when installment. */
@@ -17,33 +20,48 @@ router.post("/", requireAuth, async (req: AuthedRequest, res, next) => {
   try {
     const parsed = createSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ message: "Invalid body", details: parsed.error.flatten() });
+    const need = feeAmountFor(req.role);
+    if (need != null && !(await hasPaidAccessFee(req.userId!))) {
+      return res.status(402).json({ message: `Pay the one-time GH₵${need} onboarding fee to book.`, code: "ACCESS_FEE_REQUIRED", amount: need });
+    }
     const hostel = await prisma.hostel.findUnique({ where: { id: parsed.data.hostelId } });
     if (!hostel) return res.status(404).json({ message: "Hostel not found" });
     if (parsed.data.paymentType === "installment" && !hostel.momoAllowed) {
       return res.status(400).json({ message: "MoMo installments not allowed for this hostel" });
     }
+    const roomType = await prisma.roomType.findFirst({
+      where: { id: parsed.data.roomTypeId, hostelId: hostel.id },
+      include: { _count: { select: { bookings: { where: { status: { in: ACTIVE_BOOKING } } } } } },
+    });
+    if (!roomType) return res.status(400).json({ message: "Choose a valid room type" });
+    if (roomType._count.bookings >= roomType.total) {
+      return res.status(400).json({ message: "No rooms of this type left" });
+    }
+    const total = roomType.price ?? hostel.pricePerSemester;
     const booking = await prisma.booking.create({
       data: {
         studentId: req.userId!,
         hostelId: hostel.id,
-        total: hostel.pricePerSemester,
+        roomTypeId: roomType.id,
+        total,
         paymentType: parsed.data.paymentType,
         status: "pending",
         escrowStatus: "held",
       },
+      include: { roomType: true },
     });
     notifyUser(
       hostel.ownerId,
       "New booking request",
-      `${hostel.name}: ${parsed.data.paymentType === "full" ? "full payment" : "MoMo 4x"} booking for GH₵${hostel.pricePerSemester.toLocaleString()}.`,
+      `${hostel.name}: ${parsed.data.paymentType === "full" ? "full payment" : "MoMo 4x"} booking for GH₵${total.toLocaleString()}.`,
       { tab: "Owner" }
     );
-    const amountPerPart = Math.ceil(hostel.pricePerSemester / INSTALLMENTS);
+    const amountPerPart = Math.ceil(total / INSTALLMENTS);
     res.status(201).json({
       ...booking,
       breakdown:
         parsed.data.paymentType === "full"
-          ? { dueNow: hostel.pricePerSemester }
+          ? { dueNow: total }
           : { dueNow: amountPerPart, plan: `${amountPerPart} x ${INSTALLMENTS} via MoMo` },
     });
   } catch (e) {
@@ -56,7 +74,7 @@ router.get("/my", requireAuth, async (req: AuthedRequest, res, next) => {
   try {
     const bookings = await prisma.booking.findMany({
       where: { studentId: req.userId! },
-      include: { hostel: true, payments: { orderBy: { createdAt: "desc" } } },
+      include: { hostel: true, roomType: true, payments: { orderBy: { createdAt: "desc" } } },
       orderBy: { createdAt: "desc" },
     });
     res.json(bookings);
@@ -72,6 +90,7 @@ router.get("/owner", requireAuth, async (req: AuthedRequest, res, next) => {
       where: { hostel: { ownerId: req.userId! } },
       include: {
         hostel: true,
+        roomType: true,
         student: { select: { id: true, phone: true, email: true, school: true } },
         payments: { orderBy: { createdAt: "desc" } },
       },

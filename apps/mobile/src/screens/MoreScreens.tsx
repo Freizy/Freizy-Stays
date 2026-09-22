@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import { ActivityIndicator, FlatList, Linking, Share, Text, TouchableOpacity, View } from "react-native";
 import { useFocusEffect, useNavigation } from "@react-navigation/native";
 import { Badge, Card, Chip, Empty, ErrorText, Input, PrimaryButton, Screen, Title, ghs } from "../components/ui";
+import { roomLabel } from "@freizy-stays/shared";
 import { api } from "../services/api";
 import { saveReceiptPdf } from "../services/receipt";
 import { useSession } from "../store/session";
@@ -182,6 +183,7 @@ export function DashboardScreen() {
                 </View>
                 <Text style={{ marginTop: 4 }}>
                   {ghs(b.paidAmount ?? 0)} / {ghs(b.total ?? 0)} · {b.paymentType === "installment" ? "MoMo 4x" : "Full"} · Escrow: {b.escrowStatus}
+                  {b.roomType ? ` · ${roomLabel(b.roomType)}` : ""}
                 </Text>
                 <View style={{ flexDirection: "row", gap: 8, marginTop: 10, flexWrap: "wrap" }}>
                   {b.status === "paid" && (
@@ -422,6 +424,7 @@ export function OwnerScreen() {
                 <Text style={{ color: "#666", fontSize: 12 }}>{b.student?.phone ?? b.student?.email ?? "Student"} · {b.student?.school ?? ""}</Text>
                 <Text style={{ marginTop: 4 }}>
                   {ghs(b.paidAmount ?? 0)} / {ghs(b.total ?? 0)} · {b.paymentType === "installment" ? "MoMo 4x" : "Full"}
+                  {b.roomType ? ` · ${roomLabel(b.roomType)}` : ""}
                 </Text>
                 <View style={{ marginTop: 6 }}>
                   <Badge tone={b.ownerApproved ? "verified" : "pending"}>{b.ownerApproved ? "✓ Approved" : "Awaiting approval"}</Badge>
@@ -458,6 +461,9 @@ export function OwnerScreen() {
                   <Badge tone={item.isVerified ? "verified" : "pending"}>{item.isVerified ? "✓ Verified" : "⏳ Pending"}</Badge>
                   <Badge tone="muted">{item.momoAllowed ? "MoMo OK" : "Full only"}</Badge>
                 </View>
+                <TouchableOpacity onPress={() => navigation.navigate("EditHostel", { hostelId: item.id })}>
+                  <Text style={{ color: "#E30613", fontWeight: "700", marginTop: 8 }}>Edit listing + rooms →</Text>
+                </TouchableOpacity>
               </Card>
             ))}
             {loading && <ActivityIndicator style={{ marginTop: 16 }} />}

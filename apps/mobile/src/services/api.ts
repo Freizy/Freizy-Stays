@@ -8,8 +8,10 @@ async function req(path: string, token: string | null, init?: RequestInit) {
     headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}), ...(init?.headers || {}) },
   });
   if (!res.ok) {
-    const body = (await res.json().catch(() => ({}))) as { message?: string; detail?: string };
-    throw new Error([body.message || `HTTP ${res.status}`, body.detail].filter(Boolean).join(" — "));
+    const body = (await res.json().catch(() => ({}))) as { message?: string; detail?: string; code?: string };
+    const err = new Error([body.message || `HTTP ${res.status}`, body.detail].filter(Boolean).join(" — ")) as Error & { code?: string };
+    if (body.code) err.code = body.code;
+    throw err;
   }
   return res.json();
 }
@@ -26,6 +28,7 @@ export const api = {
   initiatePayment: (t: string, body: object) => req("/payments/initiate", t, { method: "POST", body: JSON.stringify(body) }),
   myPayments: (t: string) => req("/payments/my", t),
   ownerHostels: (t: string) => req("/hostels/owner/mine", t),
+  ownerUpdateHostel: (t: string, hostelId: string, body: object) => req(`/hostels/mine/${hostelId}`, t, { method: "PATCH", body: JSON.stringify(body) }),
   confirmMoveIn: (t: string, bookingId: string) => req(`/bookings/${bookingId}/confirm-move-in`, t, { method: "PATCH" }),
   ownerBookings: (t: string) => req("/bookings/owner", t),
   approveBooking: (t: string, bookingId: string) => req(`/bookings/${bookingId}/approve`, t, { method: "PATCH" }),
@@ -58,6 +61,9 @@ export const api = {
   listAnnouncements: (audience = "ALL") => req(`/admin/announcements/feed?audience=${audience}`, null),
   adminIssues: (t: string) => req("/admin/issues", t),
   adminAudit: (t: string) => req("/admin/audit", t),
+  accessFeeMine: (t: string) => req("/access-fee/mine", t),
+  initiateAccessFee: (t: string, body: object) => req("/access-fee/initiate", t, { method: "POST", body: JSON.stringify(body) }),
+  accessFeeStatus: (t: string, reference: string) => req(`/access-fee/${reference}/status`, t),
   adminHostels: (t: string) => req("/admin/hostels", t),
   suspendHostel: (t: string, hostelId: string, suspended: boolean) =>
     req(`/admin/hostels/${hostelId}/suspend`, t, { method: "PATCH", body: JSON.stringify({ suspended }) }),

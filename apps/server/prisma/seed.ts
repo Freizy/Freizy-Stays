@@ -67,6 +67,19 @@ async function main() {
       create: { id, ...rest, ownerId: owner.id, images: pics(id), videoUrl: null },
     });
   }
+  for (const h of HOSTELS) {
+    for (const t of [
+      { kind: "single", capacity: 1, total: 2, price: h.pricePerSemester + 500 },
+      { kind: "shared", capacity: 4, total: 8, price: h.pricePerSemester },
+    ] as const) {
+      const exists = await prisma.roomType.findFirst({ where: { hostelId: h.id, kind: t.kind, capacity: t.capacity } });
+      if (!exists) {
+        await prisma.roomType.create({
+          data: { hostelId: h.id, kind: t.kind, capacity: t.capacity, total: t.total, price: t.price },
+        });
+      }
+    }
+  }
   console.log(`seeded ${HOSTELS.length} hostels`);
 }
 

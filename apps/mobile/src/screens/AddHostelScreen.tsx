@@ -20,6 +20,14 @@ export function AddHostelScreen() {  const navigation = useNavigation<any>();
   const [amenities, setAmenities] = useState<string[]>(["WiFi", "Water 24/7"]);
   const [agentFee, setAgentFee] = useState(false);
   const [momoAllowed, setMomoAllowed] = useState(true);
+  const [roomTypes, setRoomTypes] = useState([
+    { kind: "single" as const, capacity: 1, total: 2, price: "" },
+    { kind: "shared" as const, capacity: 2, total: 0, price: "" },
+    { kind: "shared" as const, capacity: 3, total: 0, price: "" },
+    { kind: "shared" as const, capacity: 4, total: 6, price: "" },
+  ]);
+  const setRoom = (i: number, patch: Partial<(typeof roomTypes)[number]>) =>
+    setRoomTypes((r) => r.map((t, j) => (j === i ? { ...t, ...patch } : t)));
   const [lightScore, setLightScore] = useState<number | null>(null);
   const [waterScore, setWaterScore] = useState<number | null>(null);
   const [photos, setPhotos] = useState<string[]>([]);
@@ -132,6 +140,18 @@ function ScoreRow({ label, icon, value, onChange }: { label: string; icon: strin
     if (location.trim().length < 2) return setError("Enter the location.");
     if (!Number.isFinite(priceNum) || priceNum <= 0) return setError("Enter a valid price per semester.");
     if (photos.length < 5) return setError(`Add at least 5 photos (${photos.length}/5).`);
+    const rooms = roomTypes
+      .filter((t) => t.total > 0)
+      .map((t) => ({
+        kind: t.kind,
+        capacity: t.capacity,
+        total: t.total,
+        ...(t.price.trim() ? { price: Number(t.price) } : {}),
+      }));
+    if (!rooms.length) return setError("Add at least 1 room (set a count above 0).");
+    for (const t of rooms) {
+      if (t.price != null && (!Number.isFinite(t.price) || t.price <= 0)) return setError("Room prices must be positive numbers.");
+    }
     let coords: { latitude: number; longitude: number } | null = null;
     if (lat.trim() !== "" || lng.trim() !== "") {
       if (!pin || la < -90 || la > 90 || ln < -180 || ln > 180) {
@@ -155,9 +175,14 @@ function ScoreRow({ label, icon, value, onChange }: { label: string; icon: strin
         ...(coords ? coords : {}),
         ...(lightScore != null ? { lightScore } : {}),
         ...(waterScore != null ? { waterScore } : {}),
+        roomTypes: rooms,
       });
       navigation.goBack();
     } catch (e) {
+      if ((e as { code?: string })?.code === "ACCESS_FEE_REQUIRED") {
+        navigation.navigate("AccessFee", { requiredFor: "listing" });
+        return;
+      }
       setError(e instanceof Error ? e.message : "Could not create listing");
     } finally {
       setBusy(false);
@@ -234,6 +259,31 @@ function ScoreRow({ label, icon, value, onChange }: { label: string; icon: strin
             <Chip label={momoAllowed ? "MoMo: on" : "MoMo: off"} on={momoAllowed} dark onPress={() => setMomoAllowed(!momoAllowed)} />
           </View>
         </View>
+
+        <Field label="Rooms & types">
+          <Text style={{ color: "#666", fontSize: 12, marginBottom: 4 }}>Counts per type. Prices optional — blank means the hostel price above.</Text>
+          {roomTypes.map((t, i) => (
+            <View key={`${t.kind}-${t.capacity}`} style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: 8 }}>
+              <Text style={{ fontWeight: "700", flex: 1 }}>{t.kind === "single" ? "Single" : `Shared (${t.capacity})`}</Text>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+                <TouchableOpacity onPress={() => setRoom(i, { total: Math.max(0, t.total - 1) })} style={{ backgroundColor: "#F5F5F5", borderRadius: 8, paddingHorizontal: 12, paddingVertical: 6 }}>
+                  <Text style={{ fontSize: 16, fontWeight: "800" }}>−</Text>
+                </TouchableOpacity>
+                <Text style={{ fontWeight: "800", fontSize: 16, minWidth: 26, textAlign: "center" }}>{t.total}</Text>
+                <TouchableOpacity onPress={() => setRoom(i, { total: Math.min(50, t.total + 1) })} style={{ backgroundColor: "#F5F5F5", borderRadius: 8, paddingHorizontal: 12, paddingVertical: 6 }}>
+                  <Text style={{ fontSize: 16, fontWeight: "800" }}>＋</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          ))}
+          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 8 }}>
+            {roomTypes.map((t, i) => (
+              <View key={`p-${t.kind}-${t.capacity}`} style={{ width: "48%" }}>
+                <Input value={t.price} onChangeText={(v) => setRoom(i, { price: v })} keyboardType="number-pad" placeholder={`${t.kind === "single" ? "Single" : `Shared ${t.capacity}`} GH₵`} />
+              </View>
+            ))}
+          </View>
+        </Field>
 
         <Field label="Water & light scores">
           <Text style={{ color: "#666", fontSize: 12, marginBottom: 4 }}>How tenants will see it on day one — real ratings update it later.</Text>

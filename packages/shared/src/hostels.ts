@@ -19,6 +19,8 @@ export interface Hostel {
   momoAllowed: boolean;
   school: string | null;
   suspended: boolean;
+  roomTypes?: RoomType[];
+  totalAvailable?: number;
 }
 
 export interface HostelFilters {
@@ -45,6 +47,31 @@ export interface CreateHostelInput {
   school?: string;
   lightScore?: number;
   waterScore?: number;
+  roomTypes?: RoomTypeInput[];
+}
+
+export type RoomKind = "single" | "shared";
+
+export interface RoomType {
+  id: string;
+  hostelId: string;
+  kind: RoomKind;
+  capacity: number;
+  total: number;
+  price: number | null;
+  available?: number;
+}
+
+export interface RoomTypeInput {
+  id?: string;
+  kind: RoomKind;
+  capacity: number;
+  total: number;
+  price?: number;
+}
+
+export function roomLabel(t: { kind: string; capacity: number }): string {
+  return t.kind === "single" ? "Single room" : `Shared (${t.capacity})`;
 }
 
 /** Full amenity catalogue for the add-hostel form (max 20). */

@@ -12,6 +12,7 @@ export interface Booking {
   status: BookingStatus;
   escrowStatus: EscrowStatus;
   ownerApproved: boolean;
+  roomTypeId?: string | null;
   installmentPlan?: {
     totalParts: 4;
     paidParts: number;
@@ -22,4 +23,5 @@ export interface Booking {
 export interface CreateBookingInput {
   hostelId: string;
   paymentType: PaymentType;
+  roomTypeId: string;
 }
