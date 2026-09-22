@@ -65,6 +65,9 @@ model User {
   bookings Booking[] @relation("StudentBookings")
   issues   Issue[]   @relation("StudentIssues")
   pushToken String?  @map("push_token")
+  suspended Boolean @default(false)
+  announcements Announcement[] @relation("AdminAnnouncements")
+  payouts Payout[] @relation("OwnerPayouts")
 
   @@map("users")
 }
@@ -94,6 +97,9 @@ model Hostel {
   bookings Booking[]
   ratings  Rating[]
   issues   Issue[]
+  verificationChecklist String[]  @default([]) @map("verification_checklist")
+  verifiedAt            DateTime? @map("verified_at")
+  verifiedBy            String?   @map("verified_by")
 
   @@index([school])
   @@index([isVerified])
@@ -113,6 +119,8 @@ model Booking {
   status       BookingStatus @default(pending)
   escrowStatus EscrowStatus  @default(held) @map("escrow_status")
   ownerApproved Boolean      @default(false) @map("owner_approved")
+  platformFee  Int           @default(0) @map("platform_fee")
+  payouts      Payout[]
   createdAt    DateTime      @default(now()) @map("created_at")
   updatedAt    DateTime      @updatedAt @map("updated_at")
 
@@ -173,4 +181,46 @@ model Issue {
 
   @@index([hostelId])
   @@map("issues")
+}
+
+model Announcement {
+  id        String   @id @default(cuid())
+  title     String
+  body      String
+  audience  String   @default("ALL") // ALL | STUDENT | OWNER
+  createdBy String   @map("created_by")
+  creator   User     @relation("AdminAnnouncements", fields: [createdBy], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("announcements")
+}
+
+model Payout {
+  id        String   @id @default(cuid())
+  ownerId   String   @map("owner_id")
+  owner     User     @relation("OwnerPayouts", fields: [ownerId], references: [id], onDelete: Cascade)
+  bookingId String   @map("booking_id")
+  booking   Booking  @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  amount    Int
+  status    String   @default("pending") // pending | paid
+  reference String?  @unique
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([ownerId])
+  @@map("payouts")
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  actorId   String   @map("actor_id")
+  actorRole String?  @map("actor_role")
+  action    String
+  entity    String
+  entityId  String?  @map("entity_id")
+  meta      Json?
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([createdAt])
+  @@map("audit_log")
 }

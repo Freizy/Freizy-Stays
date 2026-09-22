@@ -1,6 +1,6 @@
 import { supabase } from "./supabase";
 
-const BUCKET = "hostel-images";
+const BUCKET = "hostel_images";
 
 /**
  * Upload a local photo/video to Supabase Storage, returns the public URL.

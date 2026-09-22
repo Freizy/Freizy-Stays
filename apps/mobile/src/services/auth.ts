@@ -23,10 +23,18 @@ export async function restoreToken(): Promise<string | null> {
   return data.session?.access_token ?? null;
 }
 
+let lastProfileError: string | null = null;
+export function getLastProfileError(): string | null {
+  return lastProfileError;
+}
+
 export async function loadProfile(token: string): Promise<UserProfile | null> {
   try {
-    return (await api.me(token)) as UserProfile;
-  } catch {
+    const profile = (await api.me(token)) as UserProfile;
+    lastProfileError = null;
+    return profile;
+  } catch (e) {
+    lastProfileError = e instanceof Error ? e.message : "Profile load failed";
     return null;
   }
 }

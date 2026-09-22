@@ -7,6 +7,7 @@ import { Card, Empty, PrimaryButton, Screen } from "../components/ui";
 import { theme } from "../theme";
 import { api } from "../services/api";
 import { useSession } from "../store/session";
+import { goExploreDirections } from "../services/navigation";
 
 const SAMPLE_REVIEWS = [
   { name: "Ama K.", caption: "Clean & safe", text: "Water flows all day and light rarely goes off. Warden responds fast.", water: 5, light: 4 },
@@ -41,6 +42,7 @@ export function HostelDetailScreen() {
   const navigation = useNavigation<any>();
   const route = useRoute<any>();
   const token = useSession((s) => s.token);
+  const profile = useSession((s) => s.profile);
   const { hostelId, hostel: passed } = (route.params ?? {}) as { hostelId: string; hostel?: Hostel };
   const [hostel, setHostel] = useState<Hostel | undefined>(passed);
   const [loading, setLoading] = useState(!passed);
@@ -183,6 +185,13 @@ export function HostelDetailScreen() {
           📍 {hostel.location}
           {hostel.distanceToCampusKm != null ? ` • ${hostel.distanceToCampusKm}km from ${campus}` : ""}
         </Text>
+        <TouchableOpacity
+          onPress={() => goExploreDirections(hostel)}
+          style={{ marginTop: 10, backgroundColor: "#0A0A0A", borderRadius: 12, padding: 13, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8 }}
+        >
+          <Ionicons name="navigate" size={18} color="#fff" />
+          <Text style={{ color: "#fff", fontWeight: "700" }}>Get Directions</Text>
+        </TouchableOpacity>
 
         <Text style={{ fontSize: 19, fontWeight: "800", marginTop: 18 }}>Amenities</Text>
         {hostel.amenities.length > 0 ? (
@@ -248,9 +257,12 @@ export function HostelDetailScreen() {
           <Text style={{ color: "#888", marginTop: 18 }}>Full payment only for this hostel.</Text>
         )}
 
-        <View style={{ marginTop: 14, marginBottom: 16 }}>
-          <PrimaryButton title="Book Now" onPress={() => navigation.navigate("BookingFlow", { hostelId: hostel.id, hostel })} />
-        </View>
+        {profile?.role !== "ADMIN" && (
+          <View style={{ marginTop: 14, marginBottom: 16 }}>
+            <PrimaryButton title="Book Now" onPress={() => navigation.navigate("BookingFlow", { hostelId: hostel.id, hostel })} />
+          </View>
+        )}
+        {profile?.role === "ADMIN" && <View style={{ height: 16 }} />}
       </ScrollView>
     </Screen>
   );

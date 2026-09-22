@@ -1,15 +1,13 @@
 import React, { useState } from "react";
-import { Image, Text, TextInput, TouchableOpacity, View } from "react-native";
+import { Image, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
-import { theme } from "../theme";
-import { BRAND } from "@freizy-stays/shared";
-import { PrimaryButton } from "../components/ui";
-import { sendOtp, verifyOtp } from "../services/auth";
+import { Ionicons } from "@expo/vector-icons";
 import * as WebBrowser from "expo-web-browser";
 import { makeRedirectUri } from "expo-auth-session";
-import { Ionicons } from "@expo/vector-icons";
 import { supabase } from "../services/supabase";
+import { theme } from "../theme";
+import { BRAND } from "@freizy-stays/shared";
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -19,43 +17,16 @@ interface Props {
 }
 
 export function LoginScreen({ onAuthed, onDevBypass }: Props) {
-  const [phone, setPhone] = useState("+233");
-  const [code, setCode] = useState("");
-  const [step, setStep] = useState<"phone" | "code">("phone");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  const send = async () => {
-    setBusy(true);
-    setError(null);
-    try {
-      await sendOtp(phone.trim());
-      setStep("code");
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not send code");
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const confirm = async () => {
-    setBusy(true);
-    setError(null);
-    try {
-      onAuthed(await verifyOtp(phone.trim(), code.trim()));
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Invalid code");
-    } finally {
-      setBusy(false);
-    }
-  };
+  // Expo Go → exp://<lan-ip>:8081/--/auth/callback · EAS builds → freizystays://auth/callback
+  const redirectTo = makeRedirectUri({ native: "freizystays://auth/callback", path: "auth/callback" });
 
   const oauth = async (provider: "google" | "apple") => {
     setBusy(true);
     setError(null);
     const name = provider === "google" ? "Google" : "Apple";
     try {
-      const redirectTo = makeRedirectUri({ scheme: "freizystays", path: "auth/callback" });
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider,
         options: { redirectTo, skipBrowserRedirect: true },
@@ -63,14 +34,40 @@ export function LoginScreen({ onAuthed, onDevBypass }: Props) {
       if (error) throw error;
       if (!data?.url) throw new Error(`Could not start ${name} login`);
       const res = await WebBrowser.openAuthSessionAsync(data.url, redirectTo);
-      if (res.type !== "success") return;
-      const code = new URL(res.url).searchParams.get("code");
-      if (!code) throw new Error(`${name} login did not return a code`);
-      const { data: sess, error: exErr } = await supabase.auth.exchangeCodeForSession(code);
-      if (exErr) throw exErr;
-      const at = sess.session?.access_token;
-      if (!at) throw new Error("No session returned");
-      onAuthed(at);
+      if (res.type !== "success") throw new Error("Login was interrupted before completing — try again.");
+      const returned = new URL(res.url);
+      const hash = new URLSearchParams(returned.hash.replace(/^#/, ""));
+      const err = returned.searchParams.get("error") ?? hash.get("error");
+      if (err) {
+        const desc = returned.searchParams.get("error_description") ?? hash.get("error_description") ?? err;
+        throw new Error(decodeURIComponent(desc).replace(/\+/g, " "));
+      }
+      const code = returned.searchParams.get("code");
+      if (code) {
+        const { data: sess, error: exErr } = await supabase.auth.exchangeCodeForSession(code);
+        if (exErr) throw exErr;
+        const at = sess.session?.access_token;
+        if (!at) throw new Error("No session returned");
+        onAuthed(at);
+        return;
+      }
+      // Implicit-flow fallback: tokens arrive in the URL hash.
+      const access_token = hash.get("access_token");
+      const refresh_token = hash.get("refresh_token");
+      if (access_token && refresh_token) {
+        const { error: setErr } = await supabase.auth.setSession({ access_token, refresh_token });
+        if (setErr) throw setErr;
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
+        const at = session?.access_token;
+        if (!at) throw new Error("No session returned");
+        onAuthed(at);
+        return;
+      }
+      throw new Error(
+        __DEV__ ? `No code in callback (${res.url.slice(0, 140)}…)` : `${name} login did not return a code`
+      );
     } catch (e) {
       setError(e instanceof Error ? e.message : `${name} login failed`);
     } finally {
@@ -83,69 +80,39 @@ export function LoginScreen({ onAuthed, onDevBypass }: Props) {
       <StatusBar style="light" />
       <View style={{ flex: 1, padding: 24, paddingBottom: 12 }}>
         <View style={{ flex: 1, justifyContent: "center" }}>
-        <View style={{ alignItems: "center" }}>
-          <Image source={require("../../assets/logo.png")} style={{ width: 130, height: 130, borderRadius: 24 }} resizeMode="contain" />
-          <Text style={{ color: "#fff", fontSize: 26, fontWeight: "800", marginTop: 10, fontFamily: theme.fontFamily.display, textAlign: "center" }}>
-            FREIZY <Text style={{ color: theme.colors.primary }}>STAYS</Text>
-          </Text>
-          <Text style={{ color: "#ccc", marginTop: 6, fontSize: 15, textAlign: "center" }}>{BRAND.tagline}</Text>
-        </View>
-
-        {step === "phone" ? (
-          <>
-            <Text style={{ color: "#999", marginTop: 28 }}>Enter your phone number to get a login code.</Text>
-            <TextInput
-              value={phone}
-              onChangeText={setPhone}
-              keyboardType="phone-pad"
-              autoCapitalize="none"
-              placeholder="+233201234567"
-              placeholderTextColor="#666"
-              style={{ backgroundColor: "#1c1c1c", color: "#fff", borderRadius: 12, padding: 15, marginTop: 12, fontSize: 17 }}
-            />
-            <View style={{ marginTop: 12 }}>
-              <PrimaryButton title="Send code" onPress={send} loading={busy} />
-            </View>
-          </>
-        ) : (
-          <>
-            <Text style={{ color: "#999", marginTop: 28 }}>Code sent to {phone}.</Text>
-            <TextInput
-              value={code}
-              onChangeText={setCode}
-              keyboardType="number-pad"
-              placeholder="6-digit code"
-              placeholderTextColor="#666"
-              style={{ backgroundColor: "#1c1c1c", color: "#fff", borderRadius: 12, padding: 15, marginTop: 12, fontSize: 20, letterSpacing: 4 }}
-            />
-            <View style={{ marginTop: 12 }}>
-              <PrimaryButton title="Verify & continue" onPress={confirm} loading={busy} />
-            </View>
-            <TouchableOpacity onPress={() => setStep("phone")} style={{ marginTop: 14 }}>
-              <Text style={{ color: "#888" }}>← Change number</Text>
-            </TouchableOpacity>
-          </>
-        )}
-
-        {error && <Text style={{ color: "#ff8080", marginTop: 12 }}>{error}</Text>}
-
-        <TouchableOpacity onPress={() => oauth("google")} disabled={busy} style={{ backgroundColor: "#fff", borderRadius: 12, padding: 14, marginTop: 12, alignItems: "center" }}>
-          <View style={{ flexDirection: "row", alignItems: "center" }}>
-            <Ionicons name="logo-google" size={18} color="#111" />
-            <Text style={{ color: "#111", fontWeight: "700", marginLeft: 8 }}>Continue with Google</Text>
+          <View style={{ alignItems: "center" }}>
+            <Image source={require("../../assets/logo.png")} style={{ width: 130, height: 130, borderRadius: 24 }} resizeMode="contain" />
+            <Text style={{ color: "#fff", fontSize: 26, fontWeight: "800", marginTop: 10, fontFamily: theme.fontFamily.display, textAlign: "center" }}>
+              FREIZY <Text style={{ color: theme.colors.primary }}>STAYS</Text>
+            </Text>
+            <Text style={{ color: "#ccc", marginTop: 6, fontSize: 15, textAlign: "center" }}>{BRAND.tagline}</Text>
           </View>
-        </TouchableOpacity>
-        <TouchableOpacity onPress={() => oauth("apple")} disabled={busy} style={{ backgroundColor: "#fff", borderRadius: 12, padding: 14, marginTop: 12, alignItems: "center" }}>
-          <View style={{ flexDirection: "row", alignItems: "center" }}>
-            <Ionicons name="logo-apple" size={20} color="#111" />
-            <Text style={{ color: "#111", fontWeight: "700", marginLeft: 8 }}>Continue with Apple</Text>
-          </View>
-        </TouchableOpacity>
 
-        <TouchableOpacity onPress={onDevBypass} style={{ marginTop: 36, alignItems: "center" }}>
-          <Text style={{ color: theme.colors.primary, fontWeight: "700" }}>Continue in dev mode (no SMS) →</Text>
-        </TouchableOpacity>
+          <TouchableOpacity onPress={() => oauth("google")} disabled={busy} style={{ backgroundColor: "#fff", borderRadius: 12, padding: 14, marginTop: 28, alignItems: "center" }}>
+            <View style={{ flexDirection: "row", alignItems: "center" }}>
+              <Ionicons name="logo-google" size={18} color="#111" />
+              <Text style={{ color: "#111", fontWeight: "700", marginLeft: 8 }}>Continue with Google</Text>
+            </View>
+          </TouchableOpacity>
+          <TouchableOpacity onPress={() => oauth("apple")} disabled={busy} style={{ backgroundColor: "#fff", borderRadius: 12, padding: 14, marginTop: 12, alignItems: "center" }}>
+            <View style={{ flexDirection: "row", alignItems: "center" }}>
+              <Ionicons name="logo-apple" size={20} color="#111" />
+              <Text style={{ color: "#111", fontWeight: "700", marginLeft: 8 }}>Continue with Apple</Text>
+            </View>
+          </TouchableOpacity>
 
+          {error && <Text style={{ color: "#ff8080", marginTop: 12, textAlign: "center" }}>{error}</Text>}
+
+          {__DEV__ && (
+            <>
+              <TouchableOpacity onPress={onDevBypass} style={{ marginTop: 24, alignItems: "center" }}>
+                <Text style={{ color: theme.colors.primary, fontWeight: "700" }}>Continue in dev mode (no login) →</Text>
+              </TouchableOpacity>
+              <Text style={{ color: "#555", fontSize: 11, marginTop: 12, textAlign: "center" }}>
+                Dev: allowlist this callback in Supabase → Auth → URL Configuration:{"\n"}{redirectTo}
+              </Text>
+            </>
+          )}
         </View>
         <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", paddingBottom: 4 }}>
           <View style={{ backgroundColor: "#fff", borderRadius: 10, padding: 5 }}>

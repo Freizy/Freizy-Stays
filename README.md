@@ -50,6 +50,6 @@ Free is fine for W1-4 dev. Before pilot with real money: upgrade to Pro ($25/mo)
 
 ## Auth & push setup (Supabase dashboard)
 
-- **Google login:** Authentication > Providers > enable Google (needs a Google Cloud OAuth client ID), then add `freizystays://auth/callback` under Authentication > URL Configuration > Redirect URLs
-- **Apple login:** Authentication > Providers > enable Apple (needs an Apple Services ID + Team ID + private key from developer.apple.com), same redirect URL as Google
+- **Google login:** Authentication > Providers > enable Google (needs a Google Cloud OAuth client ID), then under Authentication > URL Configuration > Redirect URLs add `freizystays://auth/callback` (production builds). For Expo Go testing, the login screen shows its exact `exp://<your-ip>:8081/--/auth/callback` URL under the buttons — add that exact URL too (it changes per Wi-Fi network).
+- **Apple login:** Authentication > Providers > enable Apple (needs an Apple Services ID + Team ID + private key from developer.apple.com), same redirect URLs as Google
 - **Push notifications:** no dashboard setup — the app registers its Expo push token on login (`POST /auth/push-token`) and the API notifies on booking requests, approvals/rejections, payment success, SOS reports, and escrow release. Test with a physical device (simulators can't receive push).

@@ -2,28 +2,64 @@ import { Router } from "express";
 import { z } from "zod";
 import { prisma } from "../config/prisma";
 import { requireAuth, requireRole, type AuthedRequest } from "../middlewares/requireAuth";
+import { parseSearchQuery } from "../services/search";
 
 const router = Router();
 
-/** GET /api/hostels?school=Legon&verifiedOnly&noAgentFee&momo&maxPrice=3000&search= */
+/** GET /api/hostels?school=&verifiedOnly&noAgentFee&momo&maxPrice=&search= (search is natural-language parsed) */
 router.get("/", async (req, res, next) => {
   try {
-    const { school, verifiedOnly, noAgentFee, momo, maxPrice, search } = req.query as Record<string, string | undefined>;
-    const hostels = await prisma.hostel.findMany({
+    const { school, verifiedOnly, noAgentFee, momo, maxPrice, search, preferSchool } = req.query as Record<string, string | undefined>;
+    const parsed = parseSearchQuery(search);
+    const effSchool = school ?? parsed.school;
+    const effMax = maxPrice ? Number(maxPrice) : parsed.maxPrice;
+    const effNoFee = noAgentFee === "true" || parsed.noAgentFee;
+    const effVerified = verifiedOnly === "true" || parsed.verifiedOnly;
+    const effMomo = momo === "true" || parsed.momoOnly;
+    const effClose = parsed.closeToCampus;
+    const unordered = await prisma.hostel.findMany({
       where: {
-        ...(school ? { school } : {}),
-        ...(verifiedOnly === "true" ? { isVerified: true } : {}),
-        ...(noAgentFee === "true" ? { agentFee: false } : {}),
-        ...(momo === "true" ? { momoAllowed: true } : {}),
-        ...(maxPrice ? { pricePerSemester: { lte: Number(maxPrice) } } : {}),
-        ...(search
-          ? { OR: [{ name: { contains: search, mode: "insensitive" } }, { location: { contains: search, mode: "insensitive" } }] }
+        ...(effSchool ? { school: effSchool } : {}),
+        ...(effVerified ? { isVerified: true } : {}),
+        ...(effNoFee ? { agentFee: false } : {}),
+        ...(effMomo ? { momoAllowed: true } : {}),
+        ...(effClose ? { distanceToCampusKm: { lte: 2 } } : {}),
+        ...(effMax ? { pricePerSemester: { lte: effMax } } : {}),
+        ...(parsed.amenities.length ? { amenities: { hasSome: parsed.amenities } } : {}),
+        ...(parsed.text.length
+          ? {
+              AND: parsed.text.map((w) => ({
+                OR: [{ name: { contains: w, mode: "insensitive" } }, { location: { contains: w, mode: "insensitive" } }],
+              })),
+            }
           : {}),
       },
       orderBy: [{ isVerified: "desc" }, { createdAt: "desc" }],
       take: 50,
     });
-    res.json({ data: hostels, total: hostels.length });
+    // Preferred school first, then verified, nearest, newest.
+    const prefer = preferSchool || "";
+    const hostels = [...unordered].sort(
+      (a, b) =>
+        (prefer ? Number((b.school ?? "") === prefer) - Number((a.school ?? "") === prefer) : 0) ||
+        Number(b.isVerified) - Number(a.isVerified) ||
+        (a.distanceToCampusKm ?? 999) - (b.distanceToCampusKm ?? 999) ||
+        b.createdAt.getTime() - a.createdAt.getTime()
+    );
+    res.json({
+      data: hostels,
+      total: hostels.length,
+      applied: {
+        ...(effMax ? { maxPrice: effMax } : {}),
+        ...(effSchool ? { school: effSchool } : {}),
+        ...(parsed.amenities.length ? { amenities: parsed.amenities } : {}),
+        ...(effNoFee ? { noAgentFee: true } : {}),
+        ...(effVerified ? { verifiedOnly: true } : {}),
+        ...(effMomo ? { momoOnly: true } : {}),
+        ...(effClose ? { closeToCampus: true } : {}),
+        ...(parsed.text.length ? { keywords: parsed.text } : {}),
+      },
+    });
   } catch (e) {
     next(e);
   }

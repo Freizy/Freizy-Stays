@@ -22,3 +22,11 @@ export type HomeFilterChip = (typeof HOME_FILTER_CHIPS)[number];
 
 export const BUDGET_MIN = 1500;
 export const BUDGET_MAX = 10000;
+
+export const SCHOOL_CITY: Record<string, string> = {
+  Legon: "Accra",
+  KNUST: "Kumasi",
+  UCC: "Cape Coast",
+  UPSA: "Accra",
+  UDS: "Tamale",
+};

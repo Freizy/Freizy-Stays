@@ -10,3 +10,29 @@ export interface Paginated<T> {
   page: number;
   pageSize: number;
 }
+
+export interface Announcement {
+  id: string;
+  title: string;
+  body: string;
+  audience: "ALL" | "STUDENT" | "OWNER";
+}
+
+export interface Payout {
+  id: string;
+  ownerId: string;
+  bookingId: string;
+  amount: number;
+  status: string;
+  reference: string | null;
+}
+
+export interface AuditEntry {
+  id: string;
+  actorId: string;
+  actorRole: string | null;
+  action: string;
+  entity: string;
+  entityId: string | null;
+  createdAt: string;
+}

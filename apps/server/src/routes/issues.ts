@@ -78,6 +78,20 @@ router.get("/owner", requireAuth, async (req: AuthedRequest, res, next) => {
   }
 });
 
+/** PATCH /api/issues/:id/escalate — student or owner pushes a report to admin. */
+router.patch("/:id/escalate", requireAuth, async (req: AuthedRequest, res, next) => {
+  try {
+    const issue = await prisma.issue.findUnique({ where: { id: req.params.id }, include: { hostel: true } });
+    if (!issue) return res.status(404).json({ message: "Issue not found" });
+    const mine = issue.studentId === req.userId;
+    const owner = !!issue.hostel && issue.hostel.ownerId === req.userId;
+    if (!mine && !owner && req.role !== "ADMIN") return res.status(403).json({ message: "Not allowed" });
+    res.json(await prisma.issue.update({ where: { id: issue.id }, data: { status: "escalated" } }));
+  } catch (e) {
+    next(e);
+  }
+});
+
 /** PATCH /api/issues/:id/resolve — owner of the hostel or admin. */
 router.patch("/:id/resolve", requireAuth, async (req: AuthedRequest, res, next) => {
   try {
@@ -85,6 +99,9 @@ router.patch("/:id/resolve", requireAuth, async (req: AuthedRequest, res, next) 
     if (!issue) return res.status(404).json({ message: "Issue not found" });
     if (issue.hostel && issue.hostel.ownerId !== req.userId && req.role !== "ADMIN") {
       return res.status(403).json({ message: "Not your listing" });
+    }
+    if (!issue.hostel && req.role !== "ADMIN") {
+      return res.status(403).json({ message: "Only admin can resolve general reports" });
     }
     res.json(await prisma.issue.update({ where: { id: issue.id }, data: { status: "resolved" } }));
   } catch (e) {

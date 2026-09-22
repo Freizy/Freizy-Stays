@@ -1,3 +1,8 @@
+import dotenv from "dotenv";
+// Load first inside this module so env is ready no matter the import order
+// (ESM hoisting can otherwise evaluate this file before index.ts body runs).
+dotenv.config();
+
 function required(name: string, fallback = ""): string {
   const v = process.env[name] ?? fallback;
   return v;

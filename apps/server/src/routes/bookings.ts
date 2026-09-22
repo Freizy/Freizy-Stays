@@ -78,11 +78,18 @@ router.get("/owner", requireAuth, async (req: AuthedRequest, res, next) => {
       orderBy: { createdAt: "desc" },
     });
     const sum = (list: typeof bookings) => list.reduce((s, b) => s + b.paidAmount, 0);
+    const releasedNet = bookings
+      .filter((b) => b.escrowStatus === "released")
+      .reduce((s, b) => s + b.paidAmount - (b.platformFee ?? 0), 0);
+    const fees = bookings
+      .filter((b) => b.escrowStatus === "released")
+      .reduce((s, b) => s + (b.platformFee ?? 0), 0);
     res.json({
       bookings,
       wallet: {
         held: sum(bookings.filter((b) => b.escrowStatus === "held")),
-        released: sum(bookings.filter((b) => b.escrowStatus === "released")),
+        released: releasedNet,
+        fees,
         pendingCount: bookings.filter((b) => b.status === "pending").length,
       },
     });

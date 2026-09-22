@@ -1,3 +1,6 @@
+import dotenv from "dotenv";
+dotenv.config();
+
 import express from "express";
 import cors from "cors";
 import helmet from "helmet";
@@ -12,6 +15,7 @@ import paymentRoutes from "./routes/payments";
 import adminRoutes from "./routes/admin";
 import ratingRoutes from "./routes/ratings";
 import issueRoutes from "./routes/issues";
+import payoutRoutes from "./routes/payouts";
 
 const app = express();
 app.use(helmet());
@@ -28,6 +32,7 @@ app.use("/api/payments", paymentRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api/ratings", ratingRoutes);
 app.use("/api/issues", issueRoutes);
+app.use("/api/payouts", payoutRoutes);
 
 app.use(notFound);
 app.use(errorHandler);

@@ -289,6 +289,7 @@ interface Wallet {
   held: number;
   released: number;
   pendingCount: number;
+  fees: number;
 }
 
 export function OwnerScreen() {
@@ -297,7 +298,8 @@ export function OwnerScreen() {
   const [listings, setListings] = useState<any[]>([]);
   const [requests, setRequests] = useState<any[]>([]);
   const [issues, setIssues] = useState<any[]>([]);
-  const [wallet, setWallet] = useState<Wallet>({ held: 0, released: 0, pendingCount: 0 });
+  const [payouts, setPayouts] = useState<any[]>([]);
+  const [wallet, setWallet] = useState<Wallet>({ held: 0, released: 0, pendingCount: 0, fees: 0 });
   const [loading, setLoading] = useState(false);
   const [acting, setActing] = useState<string | null>(null);
 
@@ -305,14 +307,16 @@ export function OwnerScreen() {
     if (!token) return;
     setLoading(true);
     try {
-      const [l, r, iss] = await Promise.all([
+      const [l, r, iss, pay] = await Promise.all([
         api.ownerHostels(token) as Promise<any[]>,
         api.ownerBookings(token) as Promise<{ bookings: any[]; wallet: Wallet }>,
         api.ownerIssues(token) as Promise<any[]>,
+        api.ownerPayouts(token) as Promise<any[]>,
       ]);
       setListings(l ?? []);
       setRequests(r.bookings ?? []);
-      setWallet(r.wallet ?? { held: 0, released: 0, pendingCount: 0 });
+      setWallet(Object.assign({ held: 0, released: 0, pendingCount: 0, fees: 0 }, r.wallet ?? {}));
+      setPayouts(pay ?? []);
       setIssues((iss ?? []).sort((a, b) => (a.status === b.status ? 0 : a.status === "open" ? -1 : 1)));
     } catch {
       /* keep stale data, offline */
@@ -372,8 +376,23 @@ export function OwnerScreen() {
             <Card style={{ marginTop: 12, backgroundColor: "#0A0A0A", borderColor: "#0A0A0A" }}>
               <Text style={{ color: "#fff", fontWeight: "800" }}>Wallet</Text>
               <Text style={{ color: "#fff", marginTop: 4, fontSize: 16 }}>Available: {ghs(wallet.released)}</Text>
-              <Text style={{ color: "#aaa", fontSize: 12 }}>In Freizy escrow: {ghs(wallet.held)} · {wallet.pendingCount} pending</Text>
+              <Text style={{ color: "#aaa", fontSize: 12 }}>In Freizy escrow: {ghs(wallet.held)} · {wallet.pendingCount} pending · Fees: {ghs(wallet.fees)}</Text>
             </Card>
+
+            {payouts.length > 0 && (
+              <View style={{ marginTop: 12 }}>
+                <Text style={{ fontWeight: "800", fontSize: 15 }}>Payouts</Text>
+                {payouts.map((p: any) => (
+                  <Card key={p.id} style={{ marginTop: 8 }}>
+                    <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+                      <Text style={{ fontWeight: "800" }}>{ghs(p.amount ?? 0)}</Text>
+                      <Badge tone={p.status === "paid" ? "verified" : "pending"}>{p.status}</Badge>
+                    </View>
+                    <Text style={{ color: "#666", fontSize: 12 }}>{p.booking?.hostel?.name ?? ""}{p.reference ? ` · ref ${p.reference}` : ""}</Text>
+                  </Card>
+                ))}
+              </View>
+            )}
 
             <Text style={{ fontSize: 18, fontWeight: "800", marginTop: 20 }}>Reports & SOS ({openIssues.length} open)</Text>
             {openIssues.length === 0 && !loading && <Empty>No open reports. 🎉</Empty>}
