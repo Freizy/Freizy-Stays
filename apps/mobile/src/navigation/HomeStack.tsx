@@ -9,7 +9,7 @@ const Stack = createNativeStackNavigator();
 
 export function HomeStack() {
   return (
-    <Stack.Navigator>
+    <Stack.Navigator screenOptions={{ headerShown: false }}>
       <Stack.Screen name="Feed" options={{ title: "Freizy Stays" }}>
         {({ navigation }: any) => (
           <HomeScreen onSelect={(h: Hostel) => navigation.navigate("HostelDetail", { hostelId: h.id, hostel: h })} />

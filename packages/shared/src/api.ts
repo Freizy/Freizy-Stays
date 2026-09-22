@@ -36,3 +36,16 @@ export interface AuditEntry {
   entityId: string | null;
   createdAt: string;
 }
+
+export interface SchoolInfo {
+  id: string;
+  name: string;
+  city: string;
+  latitude: number;
+  longitude: number;
+}
+
+/** Live server distance preferred, stored distance as fallback. */
+export function distKm(h: { distanceKm?: number | null; distanceToCampusKm: number | null }): number | null {
+  return h.distanceKm ?? h.distanceToCampusKm;
+}

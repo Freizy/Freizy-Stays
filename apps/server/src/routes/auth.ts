@@ -20,9 +20,11 @@ const updateMeSchema = z.object({
   school: z.string().optional(),
   budget: z.number().int().min(1500).max(10000).optional(),
   mustHaves: z.array(z.string()).optional(),
+  name: z.string().min(2).max(60).optional(),
+  phone: z.string().regex(/^\+?[0-9]{9,15}$/, "Enter a valid phone number").optional(),
 });
 
-/** PATCH /api/auth/me — onboarding: role, school, budget, must-haves. */
+/** PATCH /api/auth/me — onboarding fields + profile name/phone. Number conflicts → 400. */
 router.patch("/me", requireAuth, async (req: AuthedRequest, res, next) => {
   try {
     const parsed = updateMeSchema.safeParse(req.body);
@@ -30,6 +32,9 @@ router.patch("/me", requireAuth, async (req: AuthedRequest, res, next) => {
     const user = await prisma.user.update({ where: { id: req.userId! }, data: parsed.data });
     res.json(user);
   } catch (e) {
+    if (typeof e === "object" && e !== null && "code" in e && (e as { code?: string }).code === "P2002") {
+      return res.status(400).json({ message: "That number is already used by another account" });
+    }
     next(e);
   }
 });

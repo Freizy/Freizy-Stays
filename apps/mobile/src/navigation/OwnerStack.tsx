@@ -7,7 +7,7 @@ const Stack = createNativeStackNavigator();
 
 export function OwnerStack() {
   return (
-    <Stack.Navigator>
+    <Stack.Navigator screenOptions={{ headerShown: false }}>
       <Stack.Screen name="OwnerHome" component={OwnerScreen} options={{ title: "Owner" }} />
       <Stack.Screen name="AddHostel" component={AddHostelScreen} options={{ title: "Add hostel" }} />
     </Stack.Navigator>

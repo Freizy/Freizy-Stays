@@ -40,6 +40,18 @@ const HOSTELS: SeedHostel[] = [
 ];
 
 async function main() {
+  const schools = [
+    { name: "Legon", city: "Accra", latitude: 5.6502, longitude: -0.1867 },
+    { name: "KNUST", city: "Kumasi", latitude: 6.6745, longitude: -1.5712 },
+    { name: "UCC", city: "Cape Coast", latitude: 5.1081, longitude: -1.2812 },
+    { name: "UPSA", city: "Accra", latitude: 5.6762, longitude: -0.1714 },
+    { name: "UDS", city: "Tamale", latitude: 9.4075, longitude: -0.8538 },
+  ];
+  for (const s of schools) {
+    await prisma.school.upsert({ where: { name: s.name }, update: { ...s }, create: { ...s } });
+  }
+  console.log(`seeded ${schools.length} schools`);
+
   const owner = await prisma.user.upsert({
     where: { phone: "+233200000001" },
     update: {},

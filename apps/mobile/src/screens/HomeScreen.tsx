@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import { ActivityIndicator, FlatList, Image, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { HOME_FILTER_CHIPS, SCHOOL_CITY, type Hostel } from "@freizy-stays/shared";
-import { Badge, Card, Chip, Empty, Input, Screen, ghs } from "../components/ui";
+import { Badge, Card, Chip, Empty, Input, Screen, distKm, ghs } from "../components/ui";
 import { theme } from "../theme";
 import { api } from "../services/api";
 import { useSession } from "../store/session";
@@ -12,13 +12,13 @@ export const MOCK: Hostel[] = [
     id: "1", ownerId: "dev", name: "East Legon Heights", location: "Legon, Accra",
     latitude: 5.644, longitude: -0.161, distanceToCampusKm: 0.8, pricePerSemester: 3500,
     images: [], videoUrl: null, amenities: ["WiFi", "Water 24/7"], isVerified: true,
-    lightScore: 4.5, waterScore: 4.8, agentFee: false, momoAllowed: true, school: "Legon",
+    lightScore: 4.5, waterScore: 4.8, agentFee: false, momoAllowed: true, school: "Legon", suspended: false,
   },
   {
     id: "2", ownerId: "dev", name: "Fordjour House", location: "Okponglo, Legon",
     latitude: 6.674, longitude: -1.574, distanceToCampusKm: 1.2, pricePerSemester: 2800,
     images: [], videoUrl: null, amenities: ["WiFi"], isVerified: false,
-    lightScore: 4.0, waterScore: 4.2, agentFee: true, momoAllowed: true, school: "KNUST",
+    lightScore: 4.0, waterScore: 4.2, agentFee: true, momoAllowed: true, school: "KNUST", suspended: false,
   },
 ];
 
@@ -241,7 +241,7 @@ export function HomeScreen({ onSelect }: { onSelect?: (h: Hostel) => void }) {
                     <View style={{ flex: 1, paddingLeft: 12, justifyContent: "center" }}>
                       <Text style={{ fontWeight: "800", fontSize: 17 }} numberOfLines={1}>{item.name}</Text>
                       <Text style={{ color: "#666", fontSize: 13, marginTop: 2 }} numberOfLines={1}>
-                        📍 {item.distanceToCampusKm != null ? `${item.distanceToCampusKm} km • ` : ""}{item.location}
+                        📍 {distKm(item) != null ? `${distKm(item)} km • ` : ""}{item.location}
                       </Text>
                       <Text style={{ fontWeight: "800", fontSize: 16, marginTop: 6 }}>
                         GH₵{item.pricePerSemester.toLocaleString()}/sem

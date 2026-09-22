@@ -58,4 +58,12 @@ export const api = {
   listAnnouncements: (audience = "ALL") => req(`/admin/announcements/feed?audience=${audience}`, null),
   adminIssues: (t: string) => req("/admin/issues", t),
   adminAudit: (t: string) => req("/admin/audit", t),
+  adminHostels: (t: string) => req("/admin/hostels", t),
+  suspendHostel: (t: string, hostelId: string, suspended: boolean) =>
+    req(`/admin/hostels/${hostelId}/suspend`, t, { method: "PATCH", body: JSON.stringify({ suspended }) }),
+  listSchools: () => req("/schools", null),
+  adminSchools: (t: string) => req("/admin/schools", t),
+  createSchool: (t: string, body: object) => req("/admin/schools", t, { method: "POST", body: JSON.stringify(body) }),
+  updateSchool: (t: string, id: string, body: object) => req(`/admin/schools/${id}`, t, { method: "PATCH", body: JSON.stringify(body) }),
+  deleteSchool: (t: string, id: string) => req(`/admin/schools/${id}`, t, { method: "DELETE" }),
 };

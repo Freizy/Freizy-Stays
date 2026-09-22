@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { Linking, ScrollView, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { useNavigation, useRoute } from "@react-navigation/native";
+import { Ionicons } from "@expo/vector-icons";
 import { ESCROW_COPY, type Hostel, type PaymentProvider } from "@freizy-stays/shared";
 import { Badge, Card, Chip, ErrorText, Input, PrimaryButton, Screen, Sub, Title, ghs } from "../components/ui";
 import { theme } from "../theme";
@@ -99,6 +100,12 @@ export function BookingFlowScreen() {
   return (
     <Screen>
       <ScrollView showsVerticalScrollIndicator={false}>
+        <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 4 }}>
+          <TouchableOpacity onPress={() => navigation.goBack()} style={{ padding: 4, marginLeft: -4 }}>
+            <Ionicons name="chevron-back" size={26} color="#111" />
+          </TouchableOpacity>
+          <Text style={{ fontSize: 18, fontWeight: "800", marginLeft: 4 }}>Booking</Text>
+        </View>
         <Title>{hostel.name}</Title>
         <Sub>
           {ghs(hostel.pricePerSemester)} / semester · {hostel.location}

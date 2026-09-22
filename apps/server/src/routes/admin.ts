@@ -370,4 +370,93 @@ router.get("/audit", async (_req, res, next) => {
   }
 });
 
+/** GET /api/admin/schools — all schools with hostel counts. */
+router.get("/schools", async (_req, res, next) => {
+  try {
+    const [schools, counts] = await Promise.all([
+      prisma.school.findMany({ orderBy: { name: "asc" } }),
+      prisma.hostel.groupBy({ by: ["school"], _count: { _all: true } }),
+    ]);
+    const map: Record<string, number> = {};
+    counts.forEach((c) => {
+      if (c.school) map[c.school] = c._count._all;
+    });
+    res.json(schools.map((s) => ({ ...s, hostelCount: map[s.name] ?? 0 })));
+  } catch (e) {
+    next(e);
+  }
+});
+
+/** POST /api/admin/schools — add a school with map location. */
+router.post("/schools", async (req: AuthedRequest, res, next) => {
+  try {
+    const parsed = z
+      .object({ name: z.string().min(2).max(60), city: z.string().min(2).max(60), latitude: z.number().min(-90).max(90), longitude: z.number().min(-180).max(180) })
+      .safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ message: "Invalid body", details: parsed.error.flatten() });
+    const school = await prisma.school.create({ data: parsed.data });
+    await audit(req.userId!, req.role, "school.create", "school", school.id, { name: school.name });
+    res.status(201).json(school);
+  } catch (e) {
+    next(e);
+  }
+});
+
+/** PATCH /api/admin/schools/:id — edit; renaming re-links hostels. */
+router.patch("/schools/:id", async (req: AuthedRequest, res, next) => {
+  try {
+    const parsed = z
+      .object({ name: z.string().min(2).max(60).optional(), city: z.string().min(2).max(60).optional(), latitude: z.number().min(-90).max(90).optional(), longitude: z.number().min(-180).max(180).optional() })
+      .safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ message: "Invalid body" });
+    const before = await prisma.school.findUnique({ where: { id: req.params.id } });
+    if (!before) return res.status(404).json({ message: "School not found" });
+    const school = await prisma.school.update({ where: { id: req.params.id }, data: parsed.data });
+    if (parsed.data.name && parsed.data.name !== before.name) {
+      await prisma.hostel.updateMany({ where: { school: before.name }, data: { school: parsed.data.name } });
+    }
+    await audit(req.userId!, req.role, "school.edit", "school", school.id, parsed.data as Record<string, unknown>);
+    res.json(school);
+  } catch (e) {
+    next(e);
+  }
+});
+
+/** DELETE /api/admin/schools/:id — blocked while hostels reference it. */
+router.delete("/schools/:id", async (req: AuthedRequest, res, next) => {
+  try {
+    const school = await prisma.school.findUnique({ where: { id: req.params.id } });
+    if (!school) return res.status(404).json({ message: "School not found" });
+    const used = await prisma.hostel.count({ where: { school: school.name } });
+    if (used > 0) return res.status(400).json({ message: `${used} hostel(s) use this school — reassign them first` });
+    await prisma.school.delete({ where: { id: school.id } });
+    await audit(req.userId!, req.role, "school.delete", "school", school.id, { name: school.name });
+    res.json({ ok: true });
+  } catch (e) {
+    next(e);
+  }
+});
+
+/** GET /api/admin/hostels — everything including suspended. */
+router.get("/hostels", async (_req, res, next) => {
+  try {
+    res.json(await prisma.hostel.findMany({ orderBy: { createdAt: "desc" }, take: 100 }));
+  } catch (e) {
+    next(e);
+  }
+});
+
+/** PATCH /api/admin/hostels/:id/suspend — hide from students/owners (feed filters it). */
+router.patch("/hostels/:id/suspend", async (req: AuthedRequest, res, next) => {
+  try {
+    const parsed = z.object({ suspended: z.boolean() }).safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ message: "Invalid body" });
+    const hostel = await prisma.hostel.update({ where: { id: req.params.id }, data: { suspended: parsed.data.suspended } });
+    await audit(req.userId!, req.role, parsed.data.suspended ? "hostel.suspend" : "hostel.restore", "hostel", hostel.id);
+    res.json(hostel);
+  } catch (e) {
+    next(e);
+  }
+});
+
 export default router;

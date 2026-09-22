@@ -1,9 +1,9 @@
 import React, { useEffect, useState } from "react";
-import { ActivityIndicator, Image, Linking, ScrollView, Share, Text, TouchableOpacity, View } from "react-native";
+import { ActivityIndicator, Alert, Image, Linking, ScrollView, Share, Text, TouchableOpacity, View } from "react-native";
 import { useNavigation, useRoute } from "@react-navigation/native";
 import { Ionicons } from "@expo/vector-icons";
 import type { Hostel } from "@freizy-stays/shared";
-import { Card, Empty, PrimaryButton, Screen } from "../components/ui";
+import { Card, Empty, PrimaryButton, Screen, distKm } from "../components/ui";
 import { theme } from "../theme";
 import { api } from "../services/api";
 import { useSession } from "../store/session";
@@ -48,6 +48,7 @@ export function HostelDetailScreen() {
   const [loading, setLoading] = useState(!passed);
   const [heroIdx, setHeroIdx] = useState(0);
   const [saved, setSaved] = useState(false);
+  const [actionBusy, setActionBusy] = useState(false);
   const [ratingSummary, setRatingSummary] = useState<{ count: number; waterAvg: number | null; lightAvg: number | null; ratings: any[] } | null>(null);
 
   useEffect(() => {
@@ -87,6 +88,22 @@ export function HostelDetailScreen() {
   }
 
   const perPart = Math.ceil(hostel.pricePerSemester / 4);
+
+  const flipSuspend = async (suspended: boolean) => {
+    if (!token) return;
+    setActionBusy(true);
+    try {
+      setHostel((await api.suspendHostel(token, hostel.id, suspended)) as Hostel);
+    } finally {
+      setActionBusy(false);
+    }
+  };
+
+  const confirmSuspend = () =>
+    Alert.alert("Suspend listing?", `${hostel.name} will disappear from student and owner feeds.`, [
+      { text: "Cancel", style: "cancel" },
+      { text: "Suspend", style: "destructive", onPress: () => flipSuspend(true) },
+    ]);
   const photos = hostel.images ?? [];
   const hero = photos[heroIdx] ?? null;
   const campus = CAMPUS[hostel.school ?? ""] ?? hostel.school ?? "campus";
@@ -183,7 +200,7 @@ export function HostelDetailScreen() {
 
         <Text style={{ color: "#555", marginTop: 10, fontSize: 14 }}>
           📍 {hostel.location}
-          {hostel.distanceToCampusKm != null ? ` • ${hostel.distanceToCampusKm}km from ${campus}` : ""}
+          {distKm(hostel) != null ? ` • ${distKm(hostel)}km from ${campus}` : ""}
         </Text>
         <TouchableOpacity
           onPress={() => goExploreDirections(hostel)}
@@ -257,12 +274,21 @@ export function HostelDetailScreen() {
           <Text style={{ color: "#888", marginTop: 18 }}>Full payment only for this hostel.</Text>
         )}
 
-        {profile?.role !== "ADMIN" && (
+        {(profile == null || profile.role === "STUDENT") && (
           <View style={{ marginTop: 14, marginBottom: 16 }}>
             <PrimaryButton title="Book Now" onPress={() => navigation.navigate("BookingFlow", { hostelId: hostel.id, hostel })} />
           </View>
         )}
-        {profile?.role === "ADMIN" && <View style={{ height: 16 }} />}
+        {profile?.role === "ADMIN" && (
+          <View style={{ marginTop: 14, marginBottom: 16 }}>
+            {hostel.suspended ? (
+              <PrimaryButton title="Restore listing" tone="dark" onPress={() => flipSuspend(false)} loading={actionBusy} />
+            ) : (
+              <PrimaryButton title="Suspend listing" onPress={confirmSuspend} loading={actionBusy} />
+            )}
+          </View>
+        )}
+        {profile?.role === "OWNER" && <View style={{ height: 16 }} />}
       </ScrollView>
     </Screen>
   );

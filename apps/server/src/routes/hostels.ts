@@ -3,6 +3,7 @@ import { z } from "zod";
 import { prisma } from "../config/prisma";
 import { requireAuth, requireRole, type AuthedRequest } from "../middlewares/requireAuth";
 import { parseSearchQuery } from "../services/search";
+import { schoolCoordsFor, withDistance } from "../services/hostelDist";
 
 const router = Router();
 
@@ -19,6 +20,8 @@ router.get("/", async (req, res, next) => {
     const effClose = parsed.closeToCampus;
     const unordered = await prisma.hostel.findMany({
       where: {
+        // Suspended listings are invisible to students/owners (admin fetches via /admin/hostels).
+        suspended: false,
         ...(effSchool ? { school: effSchool } : {}),
         ...(effVerified ? { isVerified: true } : {}),
         ...(effNoFee ? { agentFee: false } : {}),
@@ -46,9 +49,11 @@ router.get("/", async (req, res, next) => {
         (a.distanceToCampusKm ?? 999) - (b.distanceToCampusKm ?? 999) ||
         b.createdAt.getTime() - a.createdAt.getTime()
     );
+    const coords = await schoolCoordsFor(effSchool ?? preferSchool);
+    const data = withDistance(hostels, coords);
     res.json({
-      data: hostels,
-      total: hostels.length,
+      data,
+      total: data.length,
       applied: {
         ...(effMax ? { maxPrice: effMax } : {}),
         ...(effSchool ? { school: effSchool } : {}),
@@ -65,12 +70,15 @@ router.get("/", async (req, res, next) => {
   }
 });
 
-/** GET /api/hostels/:id */
+/** GET /api/hostels/:id — detail with live distance (?school= overrides hostel.school). */
 router.get("/:id", async (req, res, next) => {
   try {
     const hostel = await prisma.hostel.findUnique({ where: { id: req.params.id } });
     if (!hostel) return res.status(404).json({ message: "Hostel not found" });
-    res.json(hostel);
+    const { school } = req.query as { school?: string };
+    const coords = await schoolCoordsFor(school ?? hostel.school);
+    const [withD] = withDistance([hostel], coords);
+    res.json({ ...withD, schoolCoords: coords });
   } catch (e) {
     next(e);
   }

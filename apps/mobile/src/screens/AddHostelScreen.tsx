@@ -2,8 +2,9 @@ import React, { useState } from "react";
 import { Image, ScrollView, Text, View } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import * as ImagePicker from "expo-image-picker";
-import { MUST_HAVES, SCHOOLS } from "@freizy-stays/shared";
+import { MUST_HAVES } from "@freizy-stays/shared";
 import { Chip, ErrorText, Field, Input, PrimaryButton, Screen, Sub, Title } from "../components/ui";
+import { SchoolPicker } from "../components/SchoolPicker";
 import { api } from "../services/api";
 import { uploadHostelMedia } from "../services/media";
 import { useSession } from "../store/session";
@@ -120,11 +121,7 @@ export function AddHostelScreen() {
         </Field>
 
         <Field label="Nearest school">
-          <View style={{ flexDirection: "row", flexWrap: "wrap" }}>
-            {SCHOOLS.map((s) => (
-              <Chip key={s} label={s} on={school === s} dark onPress={() => setSchool(s)} />
-            ))}
-          </View>
+          <SchoolPicker value={school} dark onChange={setSchool} />
         </Field>
 
         <Field label="Price per semester (GH₵)">

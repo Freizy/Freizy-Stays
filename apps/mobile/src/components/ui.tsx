@@ -4,13 +4,15 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 import { theme } from "../theme";
 
+export { distKm } from "@freizy-stays/shared";
+
 export const ghs = (n: number) => `GH₵ ${n.toLocaleString()}`;
 
 export function Screen({ children, pad = true, style }: { children: React.ReactNode; pad?: boolean; style?: ViewStyle }) {
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.background }} edges={["top", "bottom"]}>
       <StatusBar style="dark" />
-      <View style={[{ flex: 1, padding: pad ? 16 : 0 }, style]}>{children}</View>
+      <View style={[{ flex: 1, paddingHorizontal: pad ? 16 : 0, paddingBottom: pad ? 16 : 0, paddingTop: pad ? 4 : 0 }, style]}>{children}</View>
     </SafeAreaView>
   );
 }

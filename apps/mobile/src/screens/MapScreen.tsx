@@ -81,8 +81,21 @@ export function MapScreen() {
     setRouteErr(null);
     setRouteInfo(null);
     try {
+      // Fallback origin: the focused school's real coords (detail includes them),
+      // else the campus gate constant.
       let from: LatLng = CAMPUS_GATE;
       let label = "campus gate";
+      try {
+        const full = (await api.hostel(token, h.id)) as Hostel & {
+          schoolCoords?: { name: string; latitude: number; longitude: number } | null;
+        };
+        if (full.schoolCoords) {
+          from = { latitude: full.schoolCoords.latitude, longitude: full.schoolCoords.longitude };
+          label = `${full.schoolCoords.name} campus`;
+        }
+      } catch {
+        /* keep gate */
+      }
       try {
         const { status } = await Location.requestForegroundPermissionsAsync();
         if (status === "granted") {

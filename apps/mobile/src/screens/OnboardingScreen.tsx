@@ -1,7 +1,8 @@
 import React, { useState } from "react";
 import { ScrollView, Text, View } from "react-native";
-import { MUST_HAVES, SCHOOLS, type Role, type UserProfile } from "@freizy-stays/shared";
+import { MUST_HAVES, type Role, type UserProfile } from "@freizy-stays/shared";
 import { Chip, ErrorText, Field, PrimaryButton, Screen, Sub, Title } from "../components/ui";
+import { SchoolPicker } from "../components/SchoolPicker";
 import { api } from "../services/api";
 
 const BUDGET_PRESETS = [2000, 2500, 3000, 3500, 5000, 8000];
@@ -48,11 +49,7 @@ export function OnboardingScreen({ token, onDone }: Props) {
         </Field>
 
         <Field label="School?">
-          <View style={{ flexDirection: "row", flexWrap: "wrap" }}>
-            {SCHOOLS.map((s) => (
-              <Chip key={s} label={s} on={school === s} onPress={() => setSchool(s)} />
-            ))}
-          </View>
+          <SchoolPicker value={school} onChange={setSchool} />
         </Field>
 
         <Field label={`Budget per semester? GH₵ ${budget.toLocaleString()}`}>

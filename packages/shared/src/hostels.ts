@@ -6,6 +6,8 @@ export interface Hostel {
   latitude: number | null;
   longitude: number | null;
   distanceToCampusKm: number | null;
+  /** Live distance from the requested school (server-computed); falls back to distanceToCampusKm. */
+  distanceKm?: number | null;
   pricePerSemester: number;
   images: string[];
   videoUrl: string | null;
@@ -16,6 +18,7 @@ export interface Hostel {
   agentFee: boolean;
   momoAllowed: boolean;
   school: string | null;
+  suspended: boolean;
 }
 
 export interface HostelFilters {

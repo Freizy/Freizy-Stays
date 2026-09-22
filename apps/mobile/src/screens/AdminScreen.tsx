@@ -26,6 +26,12 @@ export function AdminScreen() {
   const [issues, setIssues] = useState<any[]>([]);
   const [anns, setAnns] = useState<any[]>([]);
   const [audit, setAudit] = useState<any[]>([]);
+  const [schools, setSchools] = useState<any[]>([]);
+  const [sName, setSName] = useState("");
+  const [sCity, setSCity] = useState("");
+  const [sLat, setSLat] = useState("");
+  const [sLng, setSLng] = useState("");
+  const [editingSchool, setEditingSchool] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [acting, setActing] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -41,27 +47,40 @@ export function AdminScreen() {
     if (!token) return;
     setLoading(true);
     setError(null);
-    const [s, h, b, p, u, i, a, au] = await Promise.allSettled([
+    const [s, h, b, p, i, a, au, sch] = await Promise.allSettled([
       api.adminStats(token),
-      api.hostels(token),
+      api.adminHostels(token),
       api.adminBookings(token),
       api.adminPayouts(token),
-      api.adminUsers(token, userSearch.trim()),
       api.adminIssues(token),
       api.adminAnnouncements(token),
       api.adminAudit(token),
+      api.adminSchools(token),
     ]);
     if (s.status === "fulfilled") setStats(s.value);
-    if (h.status === "fulfilled") setHostels((h.value as { data: any[] }).data ?? []);
+    if (h.status === "fulfilled") setHostels((h.value as any[]) ?? []);
     if (b.status === "fulfilled") setBookings(b.value);
     if (p.status === "fulfilled") setPayouts(p.value);
-    if (u.status === "fulfilled") setUsers(u.value);
     if (i.status === "fulfilled") setIssues(i.value);
     if (a.status === "fulfilled") setAnns(a.value);
     if (au.status === "fulfilled") setAudit(au.value);
+    if (sch.status === "fulfilled") setSchools(sch.value);
     if (s.status === "rejected") setError("Some admin data failed to load.");
     setLoading(false);
-  }, [token, userSearch]);
+  }, [token]);
+
+  const searchUsers = async () => {
+    if (!token || !userSearch.trim()) return;
+    setActing("user-search");
+    setError(null);
+    try {
+      setUsers((await api.adminUsers(token, userSearch.trim())) as any[]);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Search failed");
+    } finally {
+      setActing(null);
+    }
+  };
 
   useFocusEffect(
     useCallback(() => {
@@ -81,6 +100,24 @@ export function AdminScreen() {
     } finally {
       setActing(null);
     }
+  };
+
+  const saveSchool = () => {
+    const id = editingSchool;
+    return run(id ? `sch:${id}` : "sch:new", async () => {
+      if (!token) throw new Error("Logged out — log in again.");
+      const body = { name: sName.trim(), city: sCity.trim(), latitude: Number(sLat), longitude: Number(sLng) };
+      if (!body.name || !body.city || !Number.isFinite(body.latitude) || !Number.isFinite(body.longitude)) {
+        throw new Error("Fill name, city, latitude, longitude.");
+      }
+      if (id) await api.updateSchool(token, id, body);
+      else await api.createSchool(token, body);
+      setSName("");
+      setSCity("");
+      setSLat("");
+      setSLng("");
+      setEditingSchool(null);
+    });
   };
 
   const toggleCheck = (hostelId: string, item: string, current: string[]) => {
@@ -138,7 +175,10 @@ export function AdminScreen() {
                 <Text style={{ color: theme.colors.textMuted, fontSize: 12 }}>{h.location} · {ghs(h.pricePerSemester ?? 0)}</Text>
               </TouchableOpacity>
               <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: 8 }}>
-                <Badge tone={h.isVerified ? "verified" : "pending"}>{h.isVerified ? "✓ Verified" : "⏳ Unverified"}</Badge>
+                <View style={{ flexDirection: "row", gap: 6 }}>
+                  <Badge tone={h.isVerified ? "verified" : "pending"}>{h.isVerified ? "✓ Verified" : "⏳ Unverified"}</Badge>
+                  {h.suspended && <Badge tone="danger">⛔ Suspended</Badge>}
+                </View>
                 <View style={{ width: 130 }}>
                   {acting === `verify:${h.id}` ? (
                     <ActivityIndicator />
@@ -179,6 +219,51 @@ export function AdminScreen() {
             </Card>
           );
         })}
+
+        <Text style={{ fontSize: 18, fontWeight: "800", marginTop: 20 }}>Schools ({schools.length})</Text>
+        <Text style={{ color: theme.colors.textMuted, fontSize: 12 }}>Map pins drive accurate distances. Deleting is blocked while hostels use a school.</Text>
+        <Card style={{ marginTop: 10 }}>
+          <Input value={sName} onChangeText={setSName} placeholder="Name e.g. UHAS" autoCapitalize="characters" />
+          <View style={{ marginTop: 8 }}>
+            <Input value={sCity} onChangeText={setSCity} placeholder="City e.g. Ho" />
+          </View>
+          <View style={{ flexDirection: "row", gap: 8, marginTop: 8 }}>
+            <View style={{ flex: 1 }}>
+              <Input value={sLat} onChangeText={setSLat} keyboardType="decimal-pad" placeholder="Latitude" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Input value={sLng} onChangeText={setSLng} keyboardType="decimal-pad" placeholder="Longitude" />
+            </View>
+          </View>
+          <Text style={{ color: theme.colors.textMuted, fontSize: 11, marginTop: 6 }}>Tip: long-press the campus on Google Maps → coordinates show in the info card.</Text>
+          <View style={{ flexDirection: "row", gap: 8, marginTop: 10 }}>
+            <View style={{ flex: 1 }}>
+              <PrimaryButton title={editingSchool ? "Save school" : "＋ Add school"} onPress={saveSchool} />
+            </View>
+            {editingSchool && (
+              <View style={{ flex: 1 }}>
+                <GhostButton title="Cancel" onPress={() => { setEditingSchool(null); setSName(""); setSCity(""); setSLat(""); setSLng(""); }} />
+              </View>
+            )}
+          </View>
+        </Card>
+        {schools.map((sc: any) => (
+          <Card key={sc.id} style={{ marginTop: 8 }}>
+            <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+              <Text style={{ fontWeight: "800", flex: 1 }}>{sc.name} <Text style={{ fontWeight: "400", color: "#666", fontSize: 12 }}>· {sc.city} · {sc.hostelCount ?? 0} hostel(s)</Text></Text>
+              <TouchableOpacity onPress={() => Alert.alert("Delete school?", `${sc.name} can only be removed with zero hostels.`, [{ text: "Cancel", style: "cancel" }, { text: "Delete", style: "destructive", onPress: () => run(`schdel:${sc.id}`, () => api.deleteSchool(token, sc.id)) }])}>
+                <Text style={{ color: theme.colors.primary, fontWeight: "700" }}>Delete</Text>
+              </TouchableOpacity>
+            </View>
+            <Text style={{ color: "#666", fontSize: 12, marginTop: 2 }}>📍 {sc.latitude}, {sc.longitude}</Text>
+            <TouchableOpacity
+              onPress={() => { setEditingSchool(sc.id); setSName(sc.name); setSCity(sc.city); setSLat(String(sc.latitude)); setSLng(String(sc.longitude)); }}
+              style={{ marginTop: 6 }}
+            >
+              <Text style={{ color: theme.colors.primary, fontWeight: "700" }}>Edit name / city / pin →</Text>
+            </TouchableOpacity>
+          </Card>
+        ))}
 
         <Text style={{ fontSize: 18, fontWeight: "800", marginTop: 20 }}>Release escrow ({releasable.length})</Text>
         {releasable.map((b) => (
@@ -244,24 +329,23 @@ export function AdminScreen() {
           </Card>
         ))}
 
-        <Text style={{ fontSize: 18, fontWeight: "800", marginTop: 20 }}>Users</Text>
+        <Text style={{ fontSize: 18, fontWeight: "800", marginTop: 20 }}>Suspend accounts</Text>
+        <Text style={{ color: theme.colors.textMuted, fontSize: 12 }}>Search by email, then suspend or restore.</Text>
         <View style={{ marginTop: 8 }}>
-          <Input value={userSearch} onChangeText={setUserSearch} placeholder="Search email or phone…" onSubmitEditing={refresh} returnKeyType="search" />
+          <Input value={userSearch} onChangeText={setUserSearch} placeholder="email e.g. user@gmail.com" onSubmitEditing={searchUsers} returnKeyType="search" autoCapitalize="none" keyboardType="email-address" />
         </View>
-        {users.slice(0, 20).map((u) => (
+        <View style={{ marginTop: 8 }}>
+          <PrimaryButton title="Search" onPress={searchUsers} loading={acting === "user-search"} />
+        </View>
+        {users.map((u) => (
           <Card key={u.id} style={{ marginTop: 8 }}>
             <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
               <Text style={{ fontWeight: "800", flex: 1 }} numberOfLines={1}>{u.email ?? u.phone ?? u.id.slice(0, 8)}</Text>
-              <Badge tone={u.suspended ? "danger" : u.role === "ADMIN" ? "verified" : "muted"}>{u.suspended ? "SUSPENDED" : u.role}</Badge>
+              <Badge tone={u.suspended ? "danger" : "muted"}>{u.suspended ? "SUSPENDED" : u.role}</Badge>
             </View>
-            <View style={{ flexDirection: "row", gap: 6, marginTop: 8, flexWrap: "wrap" }}>
-              {(["STUDENT", "OWNER", "ADMIN"] as const).filter((r) => r !== u.role).map((r) => (
-                <TouchableOpacity key={r} onPress={() => Alert.alert("Change role?", `Set ${u.email ?? u.phone} to ${r}?`, [{ text: "Cancel", style: "cancel" }, { text: "Confirm", onPress: () => run(`role:${u.id}`, () => api.setUserRole(token, u.id, r)) }])} style={{ backgroundColor: "#F5F5F5", borderRadius: 8, paddingHorizontal: 10, paddingVertical: 7 }}>
-                  <Text style={{ fontSize: 12 }}>→ {r}</Text>
-                </TouchableOpacity>
-              ))}
-              <TouchableOpacity onPress={() => run(`susp:${u.id}`, () => api.setUserSuspended(token, u.id, !u.suspended))} style={{ backgroundColor: u.suspended ? "#16A34A" : "#FDECEC", borderRadius: 8, paddingHorizontal: 10, paddingVertical: 7 }}>
-                <Text style={{ fontSize: 12, color: u.suspended ? "#fff" : theme.colors.primary, fontWeight: "700" }}>{u.suspended ? "Unsuspend" : "Suspend"}</Text>
+            <View style={{ marginTop: 8 }}>
+              <TouchableOpacity onPress={() => run(`susp:${u.id}`, () => api.setUserSuspended(token, u.id, !u.suspended))} style={{ backgroundColor: u.suspended ? "#16A34A" : "#FDECEC", borderRadius: 10, padding: 12, alignItems: "center" }}>
+                <Text style={{ color: u.suspended ? "#fff" : theme.colors.primary, fontWeight: "700" }}>{u.suspended ? "Restore account" : "Suspend account"}</Text>
               </TouchableOpacity>
             </View>
           </Card>

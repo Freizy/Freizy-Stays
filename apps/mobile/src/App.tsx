@@ -33,10 +33,10 @@ function tabIcon(active: string, inactive: string) {
 function MainTabs() {
   const profile = useSession((s) => s.profile);
   return (
-    <Tabs.Navigator screenOptions={{ tabBarActiveTintColor: theme.colors.primary, tabBarInactiveTintColor: "#8E8E93" }}>
+    <Tabs.Navigator screenOptions={{ headerShown: false, tabBarActiveTintColor: theme.colors.primary, tabBarInactiveTintColor: "#8E8E93" }}>
       <Tabs.Screen name="Home" component={HomeStack} options={{ headerShown: false, tabBarIcon: tabIcon("home", "home-outline") }} />
       <Tabs.Screen name="Explore" component={MapScreen} options={{ headerShown: false, tabBarIcon: tabIcon("compass", "compass-outline") }} />
-      {profile?.role !== "ADMIN" && (
+      {(!profile || profile.role === "STUDENT") && (
         <Tabs.Screen name="Bookings" component={DashboardScreen} options={{ tabBarIcon: tabIcon("calendar", "calendar-outline") }} />
       )}
       <Tabs.Screen name="Profile" component={ProfileScreen} options={{ tabBarIcon: tabIcon("person", "person-outline") }} />

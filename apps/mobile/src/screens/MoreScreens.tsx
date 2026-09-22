@@ -454,6 +454,7 @@ export function OwnerScreen() {
                 <Text style={{ color: "#666", fontSize: 12 }}>{item.location}</Text>
                 <Text style={{ marginTop: 2 }}>{ghs(item.pricePerSemester ?? 0)} / semester</Text>
                 <View style={{ flexDirection: "row", gap: 6, marginTop: 6 }}>
+                  {item.suspended && <Badge tone="danger">⛔ Suspended</Badge>}
                   <Badge tone={item.isVerified ? "verified" : "pending"}>{item.isVerified ? "✓ Verified" : "⏳ Pending"}</Badge>
                   <Badge tone="muted">{item.momoAllowed ? "MoMo OK" : "Full only"}</Badge>
                 </View>
