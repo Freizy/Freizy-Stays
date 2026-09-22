@@ -22,7 +22,15 @@ import accessFeeRoutes from "./routes/accessFee";
 const app = express();
 app.use(helmet());
 app.use(cors());
-app.use(express.json({ limit: "1mb" }));
+app.use(
+  express.json({
+    limit: "1mb",
+    // Keep the raw bytes: payment webhooks verify HMAC signatures against them.
+    verify: (req: any, _res: any, buf: Buffer) => {
+      req.rawBody = buf;
+    },
+  })
+);
 app.use(morgan("dev"));
 app.use(rateLimit({ windowMs: 60_000, max: 120 }));
 

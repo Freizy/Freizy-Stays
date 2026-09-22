@@ -1,4 +1,4 @@
-export type PaymentProvider = "MTN_MOMO" | "VODAFONE_CASH" | "CARD";
+export type PaymentProvider = "MTN_MOMO" | "VODAFONE_CASH" | "AT_MONEY" | "CARD";
 export type PaymentStatus = "initiated" | "pending" | "success" | "failed";
 
 export interface Payment {

@@ -38,6 +38,7 @@ enum PaymentType {
 enum PaymentProvider {
   MTN_MOMO
   VODAFONE_CASH
+  AT_MONEY
   CARD
 }
 

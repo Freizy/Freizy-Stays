@@ -131,13 +131,17 @@ router.post("/", requireAuth, requireRole("OWNER", "ADMIN"), async (req: AuthedR
     if (need != null && !(await hasPaidAccessFee(req.userId!))) {
       return res.status(402).json({ message: `Pay the one-time GH₵${need} owner fee to list.`, code: "ACCESS_FEE_REQUIRED", amount: need });
     }
-    // Normalize location: "Madina" + Legon → "Madina, Accra" (skip if city already present).
+    // School is required (validates the admin-managed list); fall back to the
+    // owner's school so raw API use still resolves. City appended when missing.
+    const owner = await prisma.user.findUnique({ where: { id: req.userId! }, select: { school: true } });
+    const candidate = parsed.data.school ?? owner?.school ?? null;
+    const schoolRow = candidate ? await prisma.school.findUnique({ where: { name: candidate } }) : null;
+    if (!schoolRow) {
+      return res.status(400).json({ message: "A valid school is required — pick the nearest school." });
+    }
     let location = parsed.data.location.trim();
-    if (parsed.data.school) {
-      const schoolRow = await prisma.school.findUnique({ where: { name: parsed.data.school } });
-      if (schoolRow && !location.toLowerCase().includes(schoolRow.city.toLowerCase())) {
-        location = `${location}, ${schoolRow.city}`;
-      }
+    if (!location.toLowerCase().includes(schoolRow.city.toLowerCase())) {
+      location = `${location}, ${schoolRow.city}`;
     }
     if (parsed.data.roomTypes.reduce((s, t) => s + t.total, 0) < 1) {
       return res.status(400).json({ message: "Add at least 1 room" });
@@ -150,6 +154,7 @@ router.post("/", requireAuth, requireRole("OWNER", "ADMIN"), async (req: AuthedR
     const hostel = await prisma.hostel.create({
       data: {
         ...rest,
+        school: schoolRow.name,
         location,
         ownerId: req.userId!,
         roomTypes: { create: roomTypes.map((t) => ({ kind: t.kind, capacity: t.capacity, total: t.total, price: t.price ?? null })) },

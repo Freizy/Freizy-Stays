@@ -17,7 +17,7 @@ const router = Router();
 router.post("/initiate", requireAuth, async (req: AuthedRequest, res, next) => {
   try {
     const schema = z.object({
-      provider: z.enum(["MTN_MOMO", "VODAFONE_CASH", "CARD"]),
+      provider: z.enum(["MTN_MOMO", "VODAFONE_CASH", "AT_MONEY", "CARD"]),
       phone: z.string().optional(),
     });
     const parsed = schema.safeParse(req.body);
@@ -31,11 +31,12 @@ router.post("/initiate", requireAuth, async (req: AuthedRequest, res, next) => {
     const reference = `FRZ-FEE-${Date.now()}-${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
 
     let extra: { sandbox: boolean; authorizationUrl?: string; prompt?: string } = { sandbox: true };
-    if (parsed.data.provider === "CARD") {
+    if (parsed.data.provider === "CARD" || parsed.data.provider === "AT_MONEY") {
       if (isPaystackConfigured()) {
         const digits = (parsed.data.phone ?? student?.phone ?? "").replace(/\D/g, "");
-        const email = student?.email ?? `${digits || "user"}@freizy.stays`;
-        const init = await initializeTransaction({ email, amountGHS: amount, reference, channels: ["card", "mobile_money"] });
+        const email = student?.email ?? `user${digits || "freizy"}@gmail.com`;
+        const channels = parsed.data.provider === "CARD" ? ["card", "mobile_money"] : ["mobile_money"];
+        const init = await initializeTransaction({ email, amountGHS: amount, reference, channels });
         extra = { sandbox: false, authorizationUrl: init.authorization_url };
       }
     } else if (isMomoConfigured()) {
@@ -46,6 +47,25 @@ router.post("/initiate", requireAuth, async (req: AuthedRequest, res, next) => {
         sandbox: env.momo.environment === "sandbox",
         prompt: `Approve GH₵${amount} on ${parsed.data.phone ?? student?.phone}`,
       };
+    }
+
+    // Idempotency: reuse a recent pending row for the same provider+amount.
+    const recent = await prisma.accessFee.findFirst({
+      where: {
+        userId: req.userId!,
+        provider: parsed.data.provider,
+        amount,
+        status: { in: ["initiated", "pending"] },
+        createdAt: { gte: new Date(Date.now() - 15 * 60 * 1000) },
+      },
+      orderBy: { createdAt: "desc" },
+    });
+    if (recent) {
+      return res.status(200).json({
+        accessFee: recent,
+        ...((recent.raw as Record<string, unknown> | null) ?? {}),
+        deduped: true,
+      });
     }
 
     const fee = await prisma.accessFee.upsert({
@@ -88,7 +108,7 @@ router.get("/:reference/status", requireAuth, async (req: AuthedRequest, res, ne
     if (fee.status === "success" || fee.status === "failed") return res.json({ status: fee.status, accessFee: fee });
     if (!fee.provider) return res.json({ status: fee.status, accessFee: fee, sandbox: true });
 
-    if (fee.provider === "CARD" && isPaystackConfigured()) {
+    if ((fee.provider === "CARD" || fee.provider === "AT_MONEY") && isPaystackConfigured()) {
       const s = await verifyTransaction(fee.reference);
       if (s !== "pending") await applyFeeResult(fee.reference, s === "success", { polled: true, status: s });
       const fresh = await prisma.accessFee.findUnique({ where: { reference: fee.reference } });

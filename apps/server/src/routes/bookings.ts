@@ -3,6 +3,7 @@ import { z } from "zod";
 import { prisma } from "../config/prisma";
 import { requireAuth, type AuthedRequest } from "../middlewares/requireAuth";
 import { ACTIVE_BOOKING } from "../services/availability";
+import { HttpError } from "../services/errors";
 import { feeAmountFor, hasPaidAccessFee } from "../services/accessFee";
 import { notifyUser } from "../services/push";
 
@@ -29,26 +30,29 @@ router.post("/", requireAuth, async (req: AuthedRequest, res, next) => {
     if (parsed.data.paymentType === "installment" && !hostel.momoAllowed) {
       return res.status(400).json({ message: "MoMo installments not allowed for this hostel" });
     }
-    const roomType = await prisma.roomType.findFirst({
-      where: { id: parsed.data.roomTypeId, hostelId: hostel.id },
-      include: { _count: { select: { bookings: { where: { status: { in: ACTIVE_BOOKING } } } } } },
-    });
-    if (!roomType) return res.status(400).json({ message: "Choose a valid room type" });
-    if (roomType._count.bookings >= roomType.total) {
-      return res.status(400).json({ message: "No rooms of this type left" });
-    }
-    const total = roomType.price ?? hostel.pricePerSemester;
-    const booking = await prisma.booking.create({
-      data: {
-        studentId: req.userId!,
-        hostelId: hostel.id,
-        roomTypeId: roomType.id,
-        total,
-        paymentType: parsed.data.paymentType,
-        status: "pending",
-        escrowStatus: "held",
-      },
-      include: { roomType: true },
+    const { booking, total } = await prisma.$transaction(async (tx) => {
+      // Lock the room-type row so concurrent bookings for the last room serialize here.
+      await tx.$queryRaw`SELECT id FROM "room_types" WHERE id = ${parsed.data.roomTypeId} FOR UPDATE`;
+      const roomType = await tx.roomType.findFirst({
+        where: { id: parsed.data.roomTypeId, hostelId: hostel.id },
+        include: { _count: { select: { bookings: { where: { status: { in: ACTIVE_BOOKING } } } } } },
+      });
+      if (!roomType) throw new HttpError(400, "Choose a valid room type");
+      if (roomType._count.bookings >= roomType.total) throw new HttpError(400, "No rooms of this type left");
+      const t = roomType.price ?? hostel.pricePerSemester;
+      const created = await tx.booking.create({
+        data: {
+          studentId: req.userId!,
+          hostelId: hostel.id,
+          roomTypeId: roomType.id,
+          total: t,
+          paymentType: parsed.data.paymentType,
+          status: "pending",
+          escrowStatus: "held",
+        },
+        include: { roomType: true },
+      });
+      return { booking: created, total: t };
     });
     notifyUser(
       hostel.ownerId,
@@ -65,6 +69,7 @@ router.post("/", requireAuth, async (req: AuthedRequest, res, next) => {
           : { dueNow: amountPerPart, plan: `${amountPerPart} x ${INSTALLMENTS} via MoMo` },
     });
   } catch (e) {
+    if (e instanceof HttpError) return res.status(e.status).json({ message: e.message });
     next(e);
   }
 });

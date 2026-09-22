@@ -15,6 +15,6 @@ export async function uploadHostelMedia(localUri: string, folder: "photos" | "vi
     contentType: blob.type || undefined,
     upsert: false,
   });
-  if (error) throw new Error(`Upload failed: ${error.message}. Create a public '${BUCKET}' bucket in Supabase Storage.`);
+  if (error) throw new Error(`Upload failed: ${error.message}. Log in as an owner and ensure the '${BUCKET}' bucket exists in Supabase Storage.`);
   return supabase.storage.from(BUCKET).getPublicUrl(path).data.publicUrl;
 }

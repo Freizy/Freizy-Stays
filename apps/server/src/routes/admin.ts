@@ -4,6 +4,7 @@ import { prisma } from "../config/prisma";
 import { requireAuth, requireRole, type AuthedRequest } from "../middlewares/requireAuth";
 import { notifyUser, sendPush } from "../services/push";
 import { audit } from "../services/audit";
+import { HttpError } from "../services/errors";
 
 const router = Router();
 
@@ -127,16 +128,23 @@ router.patch("/bookings/:id/release", async (req: AuthedRequest, res, next) => {
     if (booking.escrowStatus === "released") return res.status(400).json({ message: "Already released" });
 
     const fee = Math.round((booking.paidAmount * PLATFORM_FEE_BPS) / 10000);
-    const updated = await prisma.booking.update({
-      where: { id: booking.id },
-      data: { escrowStatus: "released", platformFee: fee },
-    });
-    let payout = await prisma.payout.findFirst({ where: { bookingId: booking.id } });
-    if (!payout) {
-      payout = await prisma.payout.create({
-        data: { ownerId: booking.hostel.ownerId, bookingId: booking.id, amount: booking.paidAmount - fee, status: "pending" },
+    // Atomic release + payout record; the row lock makes double-release impossible.
+    const { updated, payout } = await prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM "bookings" WHERE id = ${booking.id} FOR UPDATE`;
+      const fresh = await tx.booking.findUnique({ where: { id: booking.id } });
+      if (!fresh || fresh.escrowStatus === "released") throw new HttpError(400, "Already released");
+      const upd = await tx.booking.update({
+        where: { id: booking.id },
+        data: { escrowStatus: "released", platformFee: fee },
       });
-    }
+      let p = await tx.payout.findFirst({ where: { bookingId: booking.id } });
+      if (!p) {
+        p = await tx.payout.create({
+          data: { ownerId: booking.hostel.ownerId, bookingId: booking.id, amount: booking.paidAmount - fee, status: "pending" },
+        });
+      }
+      return { updated: upd, payout: p };
+    });
     notifyUser(
       booking.hostel.ownerId,
       "Escrow released 💰",
@@ -146,6 +154,7 @@ router.patch("/bookings/:id/release", async (req: AuthedRequest, res, next) => {
     await audit(req.userId!, req.role, "escrow.release", "booking", booking.id, { fee, net: booking.paidAmount - fee });
     res.json({ booking: updated, payout, fee });
   } catch (e) {
+    if (e instanceof HttpError) return res.status(e.status).json({ message: e.message });
     next(e);
   }
 });

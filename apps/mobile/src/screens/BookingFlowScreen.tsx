@@ -11,6 +11,7 @@ import { useSession } from "../store/session";
 const PROVIDERS: { id: PaymentProvider; label: string }[] = [
   { id: "MTN_MOMO", label: "MTN MoMo" },
   { id: "VODAFONE_CASH", label: "Vodafone Cash" },
+  { id: "AT_MONEY", label: "AT Money" },
   { id: "CARD", label: "Card" },
 ];
 
@@ -189,7 +190,7 @@ export function BookingFlowScreen() {
         {step !== "plan" && booking && (
           <>
             <Text style={{ fontWeight: "800", marginTop: 16, marginBottom: 8, fontSize: 16 }}>Pay with</Text>
-            <View style={{ flexDirection: "row" }}>
+            <View style={{ flexDirection: "row", flexWrap: "wrap" }}>
               {PROVIDERS.map((p) => (
                 <Chip key={p.id} label={p.label} on={provider === p.id} dark onPress={() => setProvider(p.id)} />
               ))}

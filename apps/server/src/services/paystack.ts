@@ -1,9 +1,19 @@
 import { env } from "../config/env";
+import crypto from "crypto";
 
 const API = "https://api.paystack.co";
 
 export function isPaystackConfigured(): boolean {
   return !!env.paystackSecret;
+}
+
+/** Verify a Paystack webhook HMAC-SHA512 signature against the raw request body. */
+export function verifyPaystackSignature(rawBody: Buffer | undefined, signature: string | undefined): boolean {
+  if (!env.paystackSecret || !signature || !rawBody) return false;
+  const hash = crypto.createHmac("sha512", env.paystackSecret).update(rawBody).digest("hex");
+  const a = Buffer.from(hash);
+  const b = Buffer.from(signature);
+  return a.length === b.length && crypto.timingSafeEqual(a, b);
 }
 
 async function ps(path: string, init: RequestInit = {}): Promise<Record<string, unknown>> {

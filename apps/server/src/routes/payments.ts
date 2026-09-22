@@ -6,37 +6,39 @@ import { requireAuth, type AuthedRequest } from "../middlewares/requireAuth";
 import { normalizeGhanaMsisdn } from "../services/phone";
 import { notifyUser } from "../services/push";
 import { getTransactionStatus, isMomoConfigured, requestToPay } from "../services/momo";
-import { initializeTransaction, isPaystackConfigured, verifyTransaction } from "../services/paystack";
+import { initializeTransaction, isPaystackConfigured, verifyPaystackSignature, verifyTransaction } from "../services/paystack";
 import { applyFeeResult } from "../services/accessFee";
 
 const router = Router();
 const ESCROW_NOTICE = "Your money is safe with Freizy. Owner gets paid only after you move in and confirm.";
 
-/** Idempotent: first success wins, retries are safe. */
+/** Idempotent: first success wins, retries are safe. Totals update atomically. */
 async function applyPaymentResult(reference: string, ok: boolean, raw: unknown) {
-  const existing = await prisma.payment.findUnique({ where: { reference } });
-  if (!existing || existing.status === "success") return existing;
-  const payment = await prisma.payment.update({
-    where: { reference },
-    data: { status: ok ? "success" : "failed", raw: raw as object },
-  });
-  if (ok) {
-    const booking = await prisma.booking.findUnique({ where: { id: payment.bookingId } });
-    if (booking) {
-      const paidAmount = booking.paidAmount + payment.amount;
-      await prisma.booking.update({
-        where: { id: booking.id },
-        data: { paidAmount, status: paidAmount >= booking.total ? "paid" : "pending" },
-      });
-      notifyUser(
-        booking.studentId,
-        "Payment received ✓",
-        `GH₵${payment.amount.toLocaleString()} confirmed (ref ${payment.reference.slice(0, 12)}…).`,
-        { tab: "Bookings" }
-      );
+  return prisma.$transaction(async (tx) => {
+    const existing = await tx.payment.findUnique({ where: { reference } });
+    if (!existing || existing.status === "success") return existing;
+    const payment = await tx.payment.update({
+      where: { reference },
+      data: { status: ok ? "success" : "failed", raw: raw as object },
+    });
+    if (ok) {
+      const booking = await tx.booking.findUnique({ where: { id: payment.bookingId } });
+      if (booking) {
+        const paidAmount = booking.paidAmount + payment.amount;
+        await tx.booking.update({
+          where: { id: booking.id },
+          data: { paidAmount, status: paidAmount >= booking.total ? "paid" : "pending" },
+        });
+        notifyUser(
+          booking.studentId,
+          "Payment received ✓",
+          `GH₵${payment.amount.toLocaleString()} confirmed (ref ${payment.reference.slice(0, 12)}…).`,
+          { tab: "Bookings" }
+        );
+      }
     }
-  }
-  return payment;
+    return payment;
+  });
 }
 
 /**
@@ -48,7 +50,7 @@ router.post("/initiate", requireAuth, async (req: AuthedRequest, res, next) => {
   try {
     const schema = z.object({
       bookingId: z.string(),
-      provider: z.enum(["MTN_MOMO", "VODAFONE_CASH", "CARD"]),
+      provider: z.enum(["MTN_MOMO", "VODAFONE_CASH", "AT_MONEY", "CARD"]),
       phone: z.string().optional(),
     });
     const parsed = schema.safeParse(req.body);
@@ -68,11 +70,14 @@ router.post("/initiate", requireAuth, async (req: AuthedRequest, res, next) => {
 
     let extra: { sandbox: boolean; authorizationUrl?: string; prompt?: string } = { sandbox: true };
 
-    if (parsed.data.provider === "CARD") {
+    if (parsed.data.provider === "CARD" || parsed.data.provider === "AT_MONEY") {
       if (isPaystackConfigured()) {
         const digits = (parsed.data.phone ?? student?.phone ?? "").replace(/\D/g, "");
-        const email = student?.email ?? `${digits || "user"}@freizy.stays`;
-        const init = await initializeTransaction({ email, amountGHS: amount, reference, channels: ["card", "mobile_money"] });
+        // Paystack requires a deliverable-looking email with a letter in it; phone-only users get a unique gmail fallback.
+        const email = student?.email ?? `user${digits || "freizy"}@gmail.com`;
+        // CARD: card + mobile money. AT_MONEY: mobile money only (MTN/Vodafone/AT picked on the Paystack page).
+        const channels = parsed.data.provider === "CARD" ? ["card", "mobile_money"] : ["mobile_money"];
+        const init = await initializeTransaction({ email, amountGHS: amount, reference, channels });
         extra = { sandbox: false, authorizationUrl: init.authorization_url };
       }
     } else {
@@ -87,6 +92,26 @@ router.post("/initiate", requireAuth, async (req: AuthedRequest, res, next) => {
       }
     }
 
+    // Idempotency: a recent pending row for the same booking+provider+amount is reused.
+    const recent = await prisma.payment.findFirst({
+      where: {
+        bookingId: booking.id,
+        provider: parsed.data.provider,
+        amount,
+        status: { in: ["initiated", "pending"] },
+        createdAt: { gte: new Date(Date.now() - 15 * 60 * 1000) },
+      },
+      orderBy: { createdAt: "desc" },
+    });
+    if (recent) {
+      return res.status(200).json({
+        payment: recent,
+        escrowNotice: ESCROW_NOTICE,
+        ...((recent.raw as Record<string, unknown> | null) ?? {}),
+        deduped: true,
+      });
+    }
+
     const payment = await prisma.payment.create({
       data: { bookingId: booking.id, provider: parsed.data.provider, amount, status: "pending", reference, raw: extra },
     });
@@ -97,12 +122,48 @@ router.post("/initiate", requireAuth, async (req: AuthedRequest, res, next) => {
   }
 });
 
-/** POST /api/payments/webhook/:provider — provider callbacks. */
+/**
+ * POST /api/payments/webhook/:provider — provider callbacks.
+ * Paystack calls MUST carry a valid x-paystack-signature (enforced in production).
+ * MoMo calls are treated as notifications only: the result is always re-verified
+ * against MTN's API, so forged callbacks can't mint money.
+ */
 router.post("/webhook/:provider", async (req, res, next) => {
   try {
-    const { reference, status } = req.body as { reference?: string; status?: string };
+    const provider = String(req.params.provider || "").toLowerCase();
+    const isPaystack = provider.includes("paystack") || provider.includes("card");
+
+    if (isPaystack) {
+      const sig = req.headers["x-paystack-signature"] as string | undefined;
+      const raw = (req as { rawBody?: Buffer }).rawBody;
+      if (sig) {
+        if (!verifyPaystackSignature(raw, sig)) return res.status(401).json({ message: "Bad signature" });
+      } else if (env.nodeEnv === "production") {
+        return res.status(401).json({ message: "Missing signature" });
+      }
+    }
+
+    const body = req.body as { reference?: string; status?: string; externalId?: string };
+    const reference = body.reference ?? body.externalId;
     if (!reference) return res.status(400).json({ message: "Missing reference" });
-    const ok = status === "success" || status === "successful" || status === "SUCCESSFUL";
+
+    if (!isPaystack && isMomoConfigured()) {
+      try {
+        const s = await getTransactionStatus(reference);
+        const verified = s === "SUCCESSFUL" || s === "FAILED";
+        const ok = s === "SUCCESSFUL";
+        const mark = { ...req.body, verifiedVia: "momo-poll", providerStatus: s };
+        const payment = verified ? await applyPaymentResult(reference, ok, mark) : null;
+        if (payment) return res.json({ ok: true, verified: true });
+        const fee = verified ? await applyFeeResult(reference, ok, mark) : null;
+        if (fee) return res.json({ ok: true, verified: true });
+        return res.status(404).json({ message: "Unknown reference" });
+      } catch {
+        return res.status(502).json({ message: "Could not verify with provider" });
+      }
+    }
+
+    const ok = body.status === "success" || body.status === "successful" || body.status === "SUCCESSFUL";
     const payment = await applyPaymentResult(reference, ok, req.body);
     if (payment) return res.json({ ok: true });
     const fee = await applyFeeResult(reference, ok, req.body);
@@ -140,7 +201,7 @@ router.get("/:reference/status", requireAuth, async (req: AuthedRequest, res, ne
     if (!payment || payment.booking.studentId !== req.userId) return res.status(404).json({ message: "Payment not found" });
     if (payment.status === "success" || payment.status === "failed") return res.json({ status: payment.status, payment });
 
-    if (payment.provider === "CARD" && isPaystackConfigured()) {
+    if ((payment.provider === "CARD" || payment.provider === "AT_MONEY") && isPaystackConfigured()) {
       const s = await verifyTransaction(payment.reference);
       if (s !== "pending") await applyPaymentResult(payment.reference, s === "success", { polled: true, status: s });
       const fresh = await prisma.payment.findUnique({ where: { reference: payment.reference } });
