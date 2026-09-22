@@ -9,11 +9,6 @@ import { api } from "../services/api";
 import { useSession } from "../store/session";
 import { goExploreDirections } from "../services/navigation";
 
-const SAMPLE_REVIEWS = [
-  { name: "Ama K.", caption: "Clean & safe", text: "Water flows all day and light rarely goes off. Warden responds fast.", water: 5, light: 4 },
-  { name: "Kwame", caption: "Great water supply", text: "WiFi is solid enough for online classes. Room was exactly like the photos.", water: 4, light: 5 },
-  { name: "Efe", caption: "Nice study space", text: "No agent wahala — paid with MoMo in parts and moved in smoothly.", water: 4, light: 4 },
-];
 
 const AMENITY_ICONS: Record<string, keyof typeof Ionicons.glyphMap> = {
   WiFi: "wifi",
@@ -28,6 +23,16 @@ const AMENITY_ICONS: Record<string, keyof typeof Ionicons.glyphMap> = {
   "Study Room": "book",
   Laundry: "shirt",
   Kitchen: "restaurant",
+  "Laundry Area": "shirt",
+  "Parking Space": "car",
+  DSTV: "tv",
+  "Backup Generator": "battery-charging",
+  Balcony: "sunny",
+  Wardrobe: "archive",
+  "Water Heater": "thermometer",
+  CCTV: "videocam",
+  "Cleaning Service": "sparkles",
+  "Prepaid Meter": "speedometer",
 };
 
 const CAMPUS: Record<string, string> = {
@@ -224,34 +229,28 @@ export function HostelDetailScreen() {
           <Text style={{ color: "#888", marginTop: 8 }}>No amenities listed.</Text>
         )}
 
-        <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginTop: 20 }}>
-          <Text style={{ fontSize: 19, fontWeight: "800" }}>Video Reviews</Text>
-          {ratingSummary && ratingSummary.count > 3 && (
-            <Text style={{ color: theme.colors.primary, fontWeight: "700" }}>See all {ratingSummary.count}</Text>
-          )}
-        </View>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 10, marginHorizontal: -16, paddingHorizontal: 16 }}>
-          <View style={{ flexDirection: "row", gap: 12 }}>
-            {SAMPLE_REVIEWS.map((r, i) => {
-              const thumb = photos[(i + 1) % Math.max(photos.length, 1)] ?? null;
-              return (
-                <TouchableOpacity key={r.name} onPress={openTour} disabled={!hostel.videoUrl} activeOpacity={0.8} style={{ width: 140 }}>
-                  <View style={{ width: 140, height: 100, borderRadius: 12, overflow: "hidden", backgroundColor: "#F0D9D9", alignItems: "center", justifyContent: "center" }}>
-                    {thumb && <Image source={{ uri: thumb }} style={{ width: 140, height: 100 }} resizeMode="cover" />}
-                    <View style={{ position: "absolute", width: 38, height: 38, borderRadius: 19, backgroundColor: "rgba(0,0,0,0.55)", alignItems: "center", justifyContent: "center" }}>
-                      <Ionicons name="play" size={18} color="#fff" />
-                    </View>
-                  </View>
-                  <Text style={{ fontWeight: "700", fontSize: 13, marginTop: 6 }}>{r.caption}</Text>
-                  <Text style={{ color: "#888", fontSize: 12 }}>{r.name}</Text>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-        </ScrollView>
+        <Text style={{ fontSize: 19, fontWeight: "800", marginTop: 20 }}>Videos</Text>
+        {hostel.videoUrl ? (
+          <TouchableOpacity onPress={openTour} activeOpacity={0.85} style={{ marginTop: 10, borderRadius: 14, overflow: "hidden", backgroundColor: "#000", height: 200, justifyContent: "center", alignItems: "center" }}>
+            {photos[0] ? (
+              <Image source={{ uri: photos[0] }} style={{ position: "absolute", width: "100%", height: 200, opacity: 0.75 }} resizeMode="cover" />
+            ) : null}
+            <View style={{ width: 58, height: 58, borderRadius: 29, backgroundColor: "rgba(0,0,0,0.6)", alignItems: "center", justifyContent: "center" }}>
+              <Ionicons name="play" size={26} color="#fff" />
+            </View>
+            <Text style={{ color: "#fff", fontWeight: "800", marginTop: 8 }}>Hostel video tour</Text>
+            <Text style={{ color: "#ddd", fontSize: 12 }}>Tap to watch • ~30s</Text>
+          </TouchableOpacity>
+        ) : (
+          <Card style={{ marginTop: 10 }}>
+            <Text style={{ fontWeight: "700" }}>🎬 No videos yet</Text>
+            <Text style={{ color: "#666", fontSize: 13, marginTop: 4 }}>The owner can add a 30-second video tour from the Owner tab.</Text>
+          </Card>
+        )}
 
         {liveRatings.length > 0 && (
-          <View style={{ marginTop: 14 }}>
+          <View style={{ marginTop: 16 }}>
+            <Text style={{ fontSize: 19, fontWeight: "800", marginBottom: 10 }}>Tenant ratings</Text>
             {liveRatings.slice(0, 3).map((r: any) => (
               <Card key={r.id} style={{ marginBottom: 10 }}>
                 <Text style={{ fontWeight: "700" }}>💧 {r.waterScore}/5 · ⚡ {r.lightScore}/5</Text>

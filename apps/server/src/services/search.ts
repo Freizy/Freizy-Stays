@@ -18,7 +18,6 @@ const SCHOOLS = ["Legon", "KNUST", "UCC", "UPSA", "UDS"];
 // keyword (lowercase) -> canonical stored amenity value
 const AMENITY_KEYWORDS: Record<string, string> = {
   wifi: "WiFi",
-  "wi-fi": "WiFi",
   water: "Water 24/7",
   single: "Single room",
   self: "Self-contained",
@@ -28,12 +27,25 @@ const AMENITY_KEYWORDS: Record<string, string> = {
   ac: "AC",
   security: "24/7 Security",
   kitchen: "Kitchen",
-  laundry: "Laundry",
+  laundry: "Laundry Area",
   study: "Study Room",
+  parking: "Parking Space",
+  dstv: "DSTV",
+  tv: "DSTV",
+  generator: "Backup Generator",
+  backup: "Backup Generator",
+  balcony: "Balcony",
+  wardrobe: "Wardrobe",
+  heater: "Water Heater",
+  cctv: "CCTV",
+  cleaning: "Cleaning Service",
+  cleaner: "Cleaning Service",
+  prepaid: "Prepaid Meter",
+  meter: "Prepaid Meter",
 };
 
 const STOPWORDS = new Set(
-  "hostel hostels room rooms flat flats apartment apartments in near with and for a an the me my get wey dey try find finds looking look want need needs please abeg make show give to no agent fee only verified momo installment installments close campus under below max up less than per semester sem mo month".split(" ")
+  "hostel hostels room rooms flat flats apartment apartments in near with and for a an the me my get wey dey try find finds looking look want need needs please abeg make show give to no agent fee only verified momo installment installments close campus under below max up less than per semester sem mo month air conditioning".split(" ")
 );
 
 export function parseSearchQuery(raw: string | undefined): ParsedSearch {
@@ -77,11 +89,16 @@ export function parseSearchQuery(raw: string | undefined): ParsedSearch {
     q = q.replace(/close to campus/g, " ");
   }
 
-  // Amenities
+  // Amenities (word-boundary matched so "ac" never fires inside "accra")
+  if (/air conditioning/.test(q)) {
+    if (!out.amenities.includes("AC")) out.amenities.push("AC");
+    q = q.replace(/air conditioning/g, " ");
+  }
   for (const [kw, canonical] of Object.entries(AMENITY_KEYWORDS)) {
-    if (q.includes(kw) && !out.amenities.includes(canonical)) {
+    const re = new RegExp(`\\b${kw}\\b`, "g");
+    if (re.test(q) && !out.amenities.includes(canonical)) {
       out.amenities.push(canonical);
-      q = q.split(kw).join(" ");
+      q = q.replace(re, " ");
     }
   }
 

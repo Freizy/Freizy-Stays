@@ -96,6 +96,8 @@ const createSchema = z.object({
   agentFee: z.boolean().default(false),
   momoAllowed: z.boolean().default(true),
   school: z.string().optional(),
+  lightScore: z.number().min(0).max(5).optional(),
+  waterScore: z.number().min(0).max(5).optional(),
 });
 
 /** POST /api/hostels — owner adds listing. */
@@ -103,7 +105,15 @@ router.post("/", requireAuth, requireRole("OWNER", "ADMIN"), async (req: AuthedR
   try {
     const parsed = createSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ message: "Invalid body", details: parsed.error.flatten() });
-    const hostel = await prisma.hostel.create({ data: { ...parsed.data, ownerId: req.userId! } });
+    // Normalize location: "Madina" + Legon → "Madina, Accra" (skip if city already present).
+    let location = parsed.data.location.trim();
+    if (parsed.data.school) {
+      const schoolRow = await prisma.school.findUnique({ where: { name: parsed.data.school } });
+      if (schoolRow && !location.toLowerCase().includes(schoolRow.city.toLowerCase())) {
+        location = `${location}, ${schoolRow.city}`;
+      }
+    }
+    const hostel = await prisma.hostel.create({ data: { ...parsed.data, location, ownerId: req.userId! } });
     res.status(201).json(hostel);
   } catch (e) {
     next(e);
